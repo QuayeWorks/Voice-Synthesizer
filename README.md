@@ -1,5 +1,4 @@
-**QuayeWorks Voice Synthesizer – Neural Text-to-Speech System with Whisper Integration
-**
+**QuayeWorks Voice Synthesizer – Neural Text-to-Speech System with Whisper Integration**
 **Transform Text, Voice, and Waveforms into Intelligent Speech**
 
 The QuayeWorks Voice Synthesizer is a robust, GUI-based Python application designed to train, fine-tune, and deploy custom neural text-to-speech (TTS) models. Built on Tacotron2 architecture and powered by NVIDIA WaveGlow for neural vocoding, this synthesizer enables users to convert text into lifelike speech, record and transcribe new voice data using OpenAI's Whisper, and visualize spectrograms during model debugging.
@@ -33,8 +32,7 @@ Automatically builds training datasets from recorded or uploaded audio files.
 
 - Includes adjustable hyperparameters (batch size, learning rate, data workers, cuDNN toggles).
 
-**Interactive TTS GUI (PyQt5)
-**
+**Interactive TTS GUI (PyQt5)**
 - Input text and instantly generate, play, and save synthesized audio.
 
 - Record and transcribe audio directly in the app.
