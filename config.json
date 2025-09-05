@@ -1,0 +1,21 @@
+{
+  "audio": {
+    "sample_rate": 22050,
+    "num_mels": 80,
+    "fft_size": 1024,
+    "hop_length": 256
+  },
+  "epochs": 150,
+  "datasets": [
+    {
+      "name": "my_voice",
+      "path": "datasets/my_dataset/",
+      "meta_file_train": "../metadata.csv",
+      "meta_file_val": null
+    }
+  ],
+  "batch_size": 50,
+  "num_workers": 8,
+  "lr": 0.002499999999999999,
+  "teacher_forcing_ratio": 1.0
+}
