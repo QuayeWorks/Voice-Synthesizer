@@ -1,0 +1,11 @@
+2025-11-16 03:17:00,941 [ERROR] voicesynth: Uncaught exception
+Traceback (most recent call last):
+  File "C:\Users\Emmanuel\Desktop\Projects\QuayeWorks\VoiceSynthesizer\run.py", line 2196, in <module>
+    main()
+  File "C:\Users\Emmanuel\Desktop\Projects\QuayeWorks\VoiceSynthesizer\run.py", line 2191, in main
+    mw = MainWindow()
+  File "C:\Users\Emmanuel\Desktop\Projects\QuayeWorks\VoiceSynthesizer\run.py", line 928, in __init__
+    self.tab_synth = self._build_synthesis_tab()
+  File "C:\Users\Emmanuel\Desktop\Projects\QuayeWorks\VoiceSynthesizer\run.py", line 1247, in _build_synthesis_tab
+    synth.clicked.connect(self._on_synthesize)
+AttributeError: 'MainWindow' object has no attribute '_on_synthesize'
