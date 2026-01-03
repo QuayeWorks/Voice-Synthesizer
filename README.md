@@ -1,86 +1,75 @@
-**QuayeWorks Voice Synthesizer – Neural Text-to-Speech System with Whisper Integration**
-**Transform Text, Voice, and Waveforms into Intelligent Speech**
+# Voice Synthesizer (FastPitch + HiFi-GAN)
 
-The QuayeWorks Voice Synthesizer is a robust, GUI-based Python application designed to train, fine-tune, and deploy custom neural text-to-speech (TTS) models. Built on Tacotron2 architecture and powered by NVIDIA WaveGlow for neural vocoding, this synthesizer enables users to convert text into lifelike speech, record and transcribe new voice data using OpenAI's Whisper, and visualize spectrograms during model debugging.
+This repository is trimmed to a FastPitch (text→mel) + HiFi-GAN (mel→wav) pipeline with a lightweight PyQt5 GUI (`run.py`).
 
-Whether you're a researcher building a custom dataset, an AI developer training a personal voice model, or an enthusiast exploring synthetic speech, this tool provides a streamlined end-to-end workflow—from data recording and transcription to real-time synthesis and fine-tuning.
+## What's inside
+- **FastPitch** training and inference (`third_party/fastpitch`).
+- **HiFi-GAN** vocoder and configs (`third_party/hifigan`).
+- Minimal helper scripts in `tools/` and assets under `inference/`.
+- A simplified GUI (`run.py`) that shells out to the FastPitch/HiFi-GAN CLIs.
+- Legacy utilities quarantined under `deprecated/`.
 
-**Key Features & Benefits**
-End-to-End Neural Speech Synthesis
+## Quickstart
+Assumes the LJSpeech dataset is extracted to `datasets/LJSpeech-1.1`.
 
-- Based on a custom implementation of Tacotron2 with trainable encoder-decoder-attention-postnet pipeline.
+### 1) Prepare dataset
+```bash
+python tools/build_fastpitch_ljs_filelists.py
+python third_party/fastpitch/prepare_dataset.py \
+  -d datasets/LJSpeech-1.1 \
+  --wav-text-filelists \
+    third_party/fastpitch/filelists/ljs_audio_text_train_filelist.txt \
+    third_party/fastpitch/filelists/ljs_audio_text_val_filelist.txt \
+  --extract-mels --extract-pitch
+```
 
-- Real-time synthesis using NVIDIA’s WaveGlow vocoder.
+### 2) Train FastPitch
+```bash
+python third_party/fastpitch/train.py \
+  -o checkpoints/fastpitch \
+  -d datasets/LJSpeech-1.1 \
+  --epochs 10 \
+  --batch-size 16 \
+  --learning-rate 1.5e-4 \
+  --training-files third_party/fastpitch/filelists/ljs_audio_text_train_filelist.txt \
+  --validation-files third_party/fastpitch/filelists/ljs_audio_text_val_filelist.txt \
+  --cuda
+```
+Adjust epochs/batch size as hardware allows. Use `--resume` or `--checkpoint-path` to continue training.
 
-**Whisper-Integrated Voice Recording**
+### 3) FastPitch inference (text → mel)
+```bash
+python third_party/fastpitch/inference.py \
+  -i inference/phrases/my_lines.txt \
+  -o inference/mels \
+  --save-mels \
+  --fastpitch checkpoints/fastpitch/fastpitch_checkpoint.pt \
+  --cuda
+```
+This writes `.npy` mel files under `inference/mels`.
 
-- Records microphone input and transcribes it into text using OpenAI's Whisper ASR model.
+### 4) HiFi-GAN vocoding (mel → wav)
+```bash
+python tools/mel_to_wav_hifigan.py \
+  --mel inference/mels/mel_00000.npy \
+  --hifigan checkpoints/hifigan/generator.pth \
+  --config third_party/hifigan/config_v1.json \
+  --out inference/wavs/mel_00000.wav \
+  --cuda
+```
+Replace checkpoint/config paths with your trained HiFi-GAN assets.
 
-- Automatically segments audio and updates metadata files in LJ Speech format.
+### 5) GUI
+```bash
+python run.py
+```
+Fill in the FastPitch/HiFi-GAN checkpoints and press **Synthesize** to run the same pipeline from a desktop window.
 
-**Dataset Management**
+## KEEP vs REMOVED (quarantined)
+- **Kept:** FastPitch + HiFi-GAN code, minimal helper scripts (`tools/`), GUI (`run.py`), inference assets, checkpoints folder structure.
+- **Quarantined:** Tacotron2/WaveGlow inference script and legacy config (`deprecated/`), unused debug/inspection utilities (`deprecated/tools`), old logs and placeholder inference files, Python `__pycache__` outputs.
 
-Automatically builds training datasets from recorded or uploaded audio files.
-
-- Seamless management of transcripts, metadata, and audio segments.
-
-**Training & Fine-Tuning Capabilities**
-
-- Trains custom voice models from scratch using mel spectrogram loss.
-
-- Supports single-speaker adaptation for fine-tuning on new voice data.
-
-- Includes adjustable hyperparameters (batch size, learning rate, data workers, cuDNN toggles).
-
-**Interactive TTS GUI (PyQt5)**
-- Input text and instantly generate, play, and save synthesized audio.
-
-- Record and transcribe audio directly in the app.
-
-- Load, visualize, and inspect model architecture and spectrogram outputs.
-
-- Real-time logs for training and adaptation tasks.
-
-**Advanced Debugging & Visualization**
-
-- Standalone mel spectrogram visualizer for Tacotron2 output.
-
-- Spectrogram overlays using librosa.display and matplotlib.
-
-**Technical Stack & Dependencies**
-- Framework: Python 3.x with PyTorch
-
-- Model Architecture: Tacotron2 + WaveGlow
-
-- Audio: librosa, soundfile, PyAudio
-
-- ASR: OpenAI Whisper (GPU-accelerated)
-
-- UI: PyQt5
-
-- Visualization: matplotlib
-
-- Training Logs: Auto-generated per session
-
-- File Management: Supports WAV/MP3, segmenting, renaming, and metadata tracking
-
-**Ideal Use Cases**
-- Custom AI Voice Generation
-
-- TTS Research and Prototyping
-
-- Audio Dataset Creation and Expansion
-
-- AI Education and Demonstrations
-
-- Voice Cloning and Single-Speaker Adaptation
-
-**Recomendations**
-- Hardware: atleast TWO NVIDIA CUDA Supported GPUS. i.e 2x1080TI+ capable GPU's
-- Software: Install all libraries, and use \VENV\  when running.
-- Training: Atleast 24Hr's of transcribed audio data with > 50 Epochs.
-
-**Disclaimer**
-This synthesizer is intended for educational, research, and lawful development purposes only. The user assumes full responsibility for generated content and any downstream applications. The developers disclaim liability for misuse, unethical use, or any breach of legal or ethical guidelines involving this software.
-
-Let Me know of any bugs.
+## Notes
+- Run commands from the repository root so relative imports resolve correctly.
+- `inference/mels` and `inference/wavs` stay organized for saved assets; `checkpoints/` holds your trained models.
+- `third_party/fastpitch` includes CMUDict assets for English text normalization.
