@@ -1,0 +1,70 @@
+{
+    "audio": {
+        "max-wav-value": 32768.0,
+        "sampling-rate": 22050,
+        "filter-length": 1024,
+        "hop-length": 256,
+        "win-length": 1024,
+        "mel-fmin": 0.0,
+        "mel-fmax": 7000.0
+    },
+    "data": {
+        "training-files": "filelists/myset_train.txt",
+        "validation-files": "filelists/myset_val.txt",
+        "text-cleaners": [
+            "english_cleaners"
+        ],
+        "batch-size": 32,
+        "iters-per-checkpoint": 1000,
+        "epochs": 700,
+        "shuffle-seed": 1234
+    },
+    "optimization": {
+        "learning-rate": 0.001,
+        "weight-decay": 1e-06,
+        "grad-clip-thresh": 1.0,
+        "fp16-run": false,
+        "cudnn-benchmark": false
+    },
+    "model": {
+        "n-mel-channels": 80,
+        "n-symbols": 148,
+        "symbols-embedding-dim": 512,
+        "encoder-kernel-size": 5,
+        "encoder-n-convolutions": 3,
+        "encoder-embedding-dim": 512,
+        "attention-rnn-dim": 1024,
+        "attention-dim": 128,
+        "attention-location-n-filters": 32,
+        "attention-location-kernel-size": 31,
+        "n-frames-per-step": 1,
+        "decoder-rnn-dim": 1024,
+        "prenet-dim": 256,
+        "max-decoder-steps": 1000,
+        "gate-threshold": 0.5,
+        "p-attention-dropout": 0.1,
+        "p-decoder-dropout": 0.1,
+        "postnet-embedding-dim": 512,
+        "postnet-kernel-size": 5,
+        "postnet-n-convolutions": 5,
+        "decoder-no-early-stopping": false,
+        "mask-padding": false,
+        "ignore-layers": [
+            "embedding.weight"
+        ]
+    },
+    "distributed": {
+        "n-gpus": 2,
+        "distributed-run": false,
+        "dist-backend": "nccl",
+        "dist-url": "tcp://localhost:54321"
+    },
+    "adaptation": {
+        "enable": true,
+        "warm-start": "C:/Users/Emmanuel/Desktop/Projects/QuayeWorks/VoiceSynthesizer/checkpoints/tacotron2_latest.pt",
+        "freeze-encoder": true,
+        "freeze-postnet": false,
+        "lr-mult": 0.5,
+        "transfer-layers": []
+    }
+}
