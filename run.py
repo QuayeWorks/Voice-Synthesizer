@@ -71,7 +71,16 @@ def _build_pitch_transform(settings: PitchSettings):
 def _prepare_fastpitch_model(ckpt: Path, device: torch.device, use_amp: bool):
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser = fp_infer.parse_args(parser)
-    args, unk_args = parser.parse_known_args([])
+    # Provide required CLI flags so parsing does not exit early.
+    dummy_cli = [
+        "--input",
+        "GUI_INPUT_PLACEHOLDER",
+        "--output",
+        str(BASE_DIR / "inference" / "mels"),
+        "--fastpitch",
+        str(ckpt),
+    ]
+    args, unk_args = parser.parse_known_args(dummy_cli)
     args.amp = use_amp
     model = fp_infer.load_and_setup_model(
         "FastPitch",
