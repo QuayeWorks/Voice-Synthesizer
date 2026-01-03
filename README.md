@@ -25,17 +25,23 @@ python third_party/fastpitch/prepare_dataset.py \
 
 ### 2) Train FastPitch
 ```bash
+# Single GPU (simplest)
 python third_party/fastpitch/train.py \
-  -o checkpoints/fastpitch \
+  --cuda --epochs 10 -bs 16 -lr 1.5e-4 \
   -d datasets/LJSpeech-1.1 \
-  --epochs 10 \
-  --batch-size 16 \
-  --learning-rate 1.5e-4 \
-  --training-files third_party/fastpitch/filelists/ljs_audio_text_train_filelist.txt \
-  --validation-files third_party/fastpitch/filelists/ljs_audio_text_val_filelist.txt \
-  --cuda
+  --training-files filelists/ljs_audio_text_train_filelist.txt \
+  --validation-files filelists/ljs_audio_text_val_filelist.txt \
+  -o checkpoints/fastpitch
+
+# 2 GPUs (DDP)
+torchrun --nproc_per_node=2 --master_port=29501 third_party/fastpitch/train.py \
+  --cuda --epochs 10 -bs 16 -lr 1.5e-4 \
+  -d datasets/LJSpeech-1.1 \
+  --training-files filelists/ljs_audio_text_train_filelist.txt \
+  --validation-files filelists/ljs_audio_text_val_filelist.txt \
+  -o checkpoints/fastpitch
 ```
-Adjust epochs/batch size as hardware allows. Use `--resume` or `--checkpoint-path` to continue training.
+Adjust epochs/batch size as hardware allows. Use `--resume` (or `--checkpoint-path`) to continue training from the latest checkpoint.
 
 ### 3) FastPitch inference (text → mel)
 ```bash
@@ -43,18 +49,28 @@ python third_party/fastpitch/inference.py \
   -i inference/phrases/my_lines.txt \
   -o inference/mels \
   --save-mels \
-  --fastpitch checkpoints/fastpitch/fastpitch_checkpoint.pt \
-  --cuda
+  --fastpitch checkpoints/fastpitch/FastPitch_checkpoint_100.pt \
+  --cuda \
+  --batch-size 1
 ```
-This writes `.npy` mel files under `inference/mels`.
+This writes `.npy` mel files under `inference/mels`. Add `--pace <float>` to adjust speaking speed.
 
 ### 4) HiFi-GAN vocoding (mel → wav)
 ```bash
+# Single mel -> wav
 python tools/mel_to_wav_hifigan.py \
   --mel inference/mels/mel_00000.npy \
   --hifigan checkpoints/hifigan/generator.pth \
   --config third_party/hifigan/config_v1.json \
   --out inference/wavs/mel_00000.wav \
+  --cuda
+
+# Folder of mels -> folder of wavs (recommended)
+python tools/mel_to_wav_hifigan.py \
+  --mel inference/mels \
+  --hifigan checkpoints/hifigan/generator.pth \
+  --config third_party/hifigan/config_v1.json \
+  --out inference/wavs \
   --cuda
 ```
 Replace checkpoint/config paths with your trained HiFi-GAN assets.
