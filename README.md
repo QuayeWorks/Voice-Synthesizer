@@ -12,6 +12,20 @@ This repository is trimmed to a FastPitch (text→mel) + HiFi-GAN (mel→wav) pi
 ## Quickstart
 Assumes the LJSpeech dataset is extracted to `datasets/LJSpeech-1.1`.
 
+## WSL (Ubuntu) setup
+Install the base Linux dependencies inside WSL before creating a virtual environment:
+```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip python3-dev \
+  build-essential libgl1 ffmpeg
+
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+These packages cover PyTorch builds, PyQt5 GUI support (via `libgl1`), audio processing (`ffmpeg`), and common build tools.
+
 ### 1) Prepare dataset
 ```bash
 python tools/build_fastpitch_ljs_filelists.py
