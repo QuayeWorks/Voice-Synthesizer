@@ -60,10 +60,18 @@ python tools/mel_to_wav_hifigan.py \
 Replace checkpoint/config paths with your trained HiFi-GAN assets.
 
 ### 5) GUI
+
+Install the GUI/runtime dependencies (PyTorch, PyQt5, NumPy, SciPy):
+```bash
+pip install -r requirements.txt
+```
+
+Launch the GUI:
 ```bash
 python run.py
 ```
-Fill in the FastPitch/HiFi-GAN checkpoints and press **Synthesize** to run the same pipeline from a desktop window.
+
+In the window, choose your FastPitch checkpoint, HiFi-GAN generator + config, output directory, and paste one phrase per line. Optional controls include pace, pitch transforms, CUDA/AMP toggles, mel saving, and batch size. Outputs are written to `<output>/mels/*.npy` (when enabled) and `<output>/wavs/*.wav` with unique filenames.
 
 ## KEEP vs REMOVED (quarantined)
 - **Kept:** FastPitch + HiFi-GAN code, minimal helper scripts (`tools/`), GUI (`run.py`), inference assets, checkpoints folder structure.
