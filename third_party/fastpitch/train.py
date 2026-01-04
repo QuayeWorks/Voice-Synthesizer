@@ -180,6 +180,10 @@ def parse_args(parser):
     data.add_argument('--p-arpabet', type=float, default=0.0,
                       help='Probability of using arpabets instead of graphemes '
                            'for each word; set 0 for pure grapheme training')
+    data.add_argument('--strip-style-from-text', action='store_true',
+                      help='Remove leading style tag from text sequence but expose style id separately')
+    data.add_argument('--style-tags', nargs='*', default=None,
+                      help='Optional override list of supported style tags')
     data.add_argument('--heteronyms-path', type=str, default='cmudict/heteronyms',
                       help='Path to the list of heteronyms')
     data.add_argument('--cmudict-path', type=str, default='cmudict/cmudict-0.7b',

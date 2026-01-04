@@ -105,6 +105,17 @@ def parse_args(parser):
     parser.add_argument("--p-arpabet", type=float, default=0.0, help="Probability of converting words to ARPAbet")
     parser.add_argument("--heteronyms-path", type=str, default="cmudict/heteronyms", help="")
     parser.add_argument("--cmudict-path", type=str, default="cmudict/cmudict-0.7b", help="")
+    parser.add_argument(
+        "--strip-style-from-text",
+        action="store_true",
+        help="Remove leading style tag from text sequence but return style id separately (future conditioning)",
+    )
+    parser.add_argument(
+        "--style-tags",
+        nargs="*",
+        default=None,
+        help="Optional override list of supported style tags",
+    )
 
     transform = parser.add_argument_group("transform")
     transform.add_argument("--pace", type=float, default=1.0, help="Adjust the pace of speech")
@@ -215,8 +226,18 @@ def prepare_input_sequence(
     load_mels=False,
     load_pitch=False,
     p_arpabet=0.0,
+    include_style_tokens=True,
+    style_tags=None,
+    strip_style_from_text=False,
 ):
-    tp = TextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet)
+    tp = TextProcessing(
+        symbol_set,
+        text_cleaners,
+        p_arpabet=p_arpabet,
+        include_style_tokens=include_style_tokens,
+        style_tags=style_tags,
+        strip_style_from_text=strip_style_from_text,
+    )
 
     fields["text"] = [torch.LongTensor(tp.encode_text(text)) for text in fields["text"]]
     order = np.argsort([-t.size(0) for t in fields["text"]])
@@ -358,6 +379,9 @@ def main():
         args.dataset_path,
         load_mels=(generator is None),
         p_arpabet=args.p_arpabet,
+        include_style_tokens=True,
+        style_tags=args.style_tags,
+        strip_style_from_text=args.strip_style_from_text,
     )
 
     gen_measures = MeasureTime(cuda=args.cuda)
