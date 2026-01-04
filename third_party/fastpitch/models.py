@@ -97,6 +97,8 @@ def get_model_config(model_name, args):
     """Choose a model config based on name."""
     # Keep FastPitch only
     if model_name == "FastPitch":
+        include_style_tokens = getattr(args, "include_style_tokens", True)
+
         model_config = dict(
             # io
             n_mel_channels=args.n_mel_channels,
@@ -104,7 +106,7 @@ def get_model_config(model_name, args):
             n_symbols=len(
                 get_symbols(
                     args.symbol_set,
-                    include_style_tokens=True,
+                    include_style_tokens=include_style_tokens,
                     extra_symbols=args.style_tags,
                 )
             ),

@@ -127,12 +127,11 @@ class TextProcessing(object):
         return arpabet
 
     def encode_text(self, text, return_all=False, return_style_id=False):
-        style_tag = self._extract_style_tag(text)
+        style_tag, text = self._extract_style_tag(text)
         style_id = None
 
         if style_tag is not None:
             style_id = self.symbol_to_id.get(style_tag)
-            text = text[len(style_tag):].lstrip()
 
         text_encoded, text_clean, text_arpabet = self._encode_main_text(
             text, return_all=True)
@@ -201,10 +200,11 @@ class TextProcessing(object):
 
     def _extract_style_tag(self, text):
         if self.style_tags is None:
-            return None
+            return None, text
 
         trimmed = text.lstrip()
         for tag in self.style_tags:
             if trimmed.startswith(tag):
-                return tag
-        return None
+                trimmed = trimmed[len(tag):].lstrip()
+                return tag, trimmed
+        return None, text

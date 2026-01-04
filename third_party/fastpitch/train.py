@@ -177,6 +177,12 @@ def parse_args(parser):
                       help='Type of text cleaners for input text')
     data.add_argument('--symbol-set', type=str, default='english_basic',
                       help='Define symbol set for input text')
+    data.add_argument('--include-style-tokens', dest='include_style_tokens',
+                      action='store_true', default=True,
+                      help='Append style tokens to the vocabulary')
+    data.add_argument('--no-style-tokens', dest='include_style_tokens',
+                      action='store_false',
+                      help='Disable style tokens to stay compatible with older checkpoints')
     data.add_argument('--p-arpabet', type=float, default=0.0,
                       help='Probability of using arpabets instead of graphemes '
                            'for each word; set 0 for pure grapheme training')

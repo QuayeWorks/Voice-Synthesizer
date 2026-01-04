@@ -139,6 +139,19 @@ def parse_args(parser):
         help="Type of text cleaners for input text",
     )
     text_processing.add_argument("--symbol-set", type=str, default="english_basic", help="Define symbol set for input text")
+    text_processing.add_argument(
+        "--include-style-tokens",
+        dest="include_style_tokens",
+        action="store_true",
+        default=True,
+        help="Append style tokens to the vocabulary",
+    )
+    text_processing.add_argument(
+        "--no-style-tokens",
+        dest="include_style_tokens",
+        action="store_false",
+        help="Disable style tokens to stay compatible with older checkpoints",
+    )
 
     cond = parser.add_argument_group("conditioning on additional attributes")
     cond.add_argument("--n-speakers", type=int, default=1, help="Number of speakers in the model.")
@@ -379,7 +392,7 @@ def main():
         args.dataset_path,
         load_mels=(generator is None),
         p_arpabet=args.p_arpabet,
-        include_style_tokens=True,
+        include_style_tokens=args.include_style_tokens,
         style_tags=args.style_tags,
         strip_style_from_text=args.strip_style_from_text,
     )
