@@ -31,11 +31,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from common.layers import ConvReLUNorm
-from common.utils import mask_from_lens
-from fastpitch.alignment import b_mas, mas_width1
-from fastpitch.attention import ConvAttention
-from fastpitch.transformer import FFTransformer
+from ..common.layers import ConvReLUNorm
+from ..common.utils import mask_from_lens
+from .alignment import b_mas, mas_width1
+from .attention import ConvAttention
+from .transformer import FFTransformer
 
 
 def regulate_len(durations, enc_out, pace: float = 1.0,

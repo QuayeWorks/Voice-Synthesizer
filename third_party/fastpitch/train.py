@@ -99,14 +99,14 @@ except ImportError:
     FusedLAMB = None
     _HAS_APEX = False
 
-import common.tb_dllogger as logger
-import models
-from common.tb_dllogger import log
-from common.text import cmudict
-from common.utils import BenchmarkStats, prepare_tmp
-from fastpitch.attn_loss_function import AttentionBinarizationLoss
-from fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
-from fastpitch.loss_function import FastPitchLoss
+from .common import tb_dllogger as logger
+from . import models
+from .common.tb_dllogger import log
+from .common.text import cmudict
+from .common.utils import BenchmarkStats, prepare_tmp
+from .fastpitch.attn_loss_function import AttentionBinarizationLoss
+from .fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
+from .fastpitch.loss_function import FastPitchLoss
 
 
 def parse_args(parser):

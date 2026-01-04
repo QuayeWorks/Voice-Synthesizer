@@ -30,8 +30,8 @@ from typing import Optional
 import torch
 from torch import nn as nn
 
-from fastpitch.model import TemporalPredictor
-from fastpitch.transformer_jit import FFTransformer
+from .model import TemporalPredictor
+from .transformer_jit import FFTransformer
 
 
 def regulate_len(durations, enc_out, pace: float = 1.0,
