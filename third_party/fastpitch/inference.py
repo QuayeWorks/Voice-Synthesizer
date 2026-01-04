@@ -52,15 +52,31 @@ from torch.nn.utils.rnn import pad_sequence
 import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 
-from . import models
-from .common.tb_dllogger import (
-    init_inference_metadata,
-    stdout_metric_format,
-    unique_log_fpath,
-)
-from .common.text import cmudict
-from .common.text.text_processing import TextProcessing
-from .pitch_transform import pitch_transform_custom
+if __package__ in {None, ""}:
+    import sys
+
+    _FASTPITCH_DIR = Path(__file__).resolve().parent
+    sys.path.insert(0, str(_FASTPITCH_DIR))
+
+    import models
+    from common.tb_dllogger import (
+        init_inference_metadata,
+        stdout_metric_format,
+        unique_log_fpath,
+    )
+    from common.text import cmudict
+    from common.text.text_processing import TextProcessing
+    from pitch_transform import pitch_transform_custom
+else:
+    from . import models
+    from .common.tb_dllogger import (
+        init_inference_metadata,
+        stdout_metric_format,
+        unique_log_fpath,
+    )
+    from .common.text import cmudict
+    from .common.text.text_processing import TextProcessing
+    from .pitch_transform import pitch_transform_custom
 
 
 def parse_args(parser):
