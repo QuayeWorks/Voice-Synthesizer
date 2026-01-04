@@ -2,7 +2,7 @@
 import re
 import numpy as np
 from . import cleaners
-from .symbols import get_symbols
+from .symbols import STYLE_TAGS, get_symbols
 from . import cmudict
 from .numerical import _currency_re, _expand_currency
 
@@ -24,8 +24,12 @@ _arpa_re = re.compile(r'{[^}]+}|\S+')
 class TextProcessing(object):
     def __init__(self, symbol_set, cleaner_names, p_arpabet=0.0,
                  handle_arpabet='word', handle_arpabet_ambiguous='ignore',
-                 expand_currency=True):
-        self.symbols = get_symbols(symbol_set)
+                 expand_currency=True, include_style_tokens=True,
+                 style_tags=None, strip_style_from_text=False):
+        self.style_tags = style_tags or STYLE_TAGS
+        self.strip_style_from_text = strip_style_from_text
+        self.symbols = get_symbols(symbol_set, include_style_tokens=include_style_tokens,
+                                   extra_symbols=self.style_tags)
         self.cleaner_names = cleaner_names
 
         # Mappings from symbol to numeric ID and vice versa:
@@ -122,7 +126,39 @@ class TextProcessing(object):
 
         return arpabet
 
-    def encode_text(self, text, return_all=False):
+    def encode_text(self, text, return_all=False, return_style_id=False):
+        style_tag = self._extract_style_tag(text)
+        style_id = None
+
+        if style_tag is not None:
+            style_id = self.symbol_to_id.get(style_tag)
+            text = text[len(style_tag):].lstrip()
+
+        text_encoded, text_clean, text_arpabet = self._encode_main_text(
+            text, return_all=True)
+
+        sequence = []
+        if style_tag is not None and not self.strip_style_from_text:
+            if style_id is None:
+                raise KeyError(f"Style tag {style_tag} missing from symbols list")
+            sequence.append(style_id)
+            text_clean = f"{style_tag} {text_clean}".strip()
+            if text_arpabet:
+                text_arpabet = f"{style_tag} {text_arpabet}".strip()
+
+        sequence.extend(text_encoded)
+
+        if return_all or return_style_id:
+            parts = [sequence]
+            if return_all:
+                parts.extend([text_clean, text_arpabet])
+            if return_style_id:
+                parts.append(style_id)
+            return tuple(parts)
+
+        return sequence
+
+    def _encode_main_text(self, text, return_all=False):
         if self.expand_currency:
             text = re.sub(_currency_re, _expand_currency, text)
         text_clean = [self.clean_text(split) if split[0] != '{' else split
@@ -162,3 +198,13 @@ class TextProcessing(object):
             return text_encoded, text_clean, text_arpabet
 
         return text_encoded
+
+    def _extract_style_tag(self, text):
+        if self.style_tags is None:
+            return None
+
+        trimmed = text.lstrip()
+        for tag in self.style_tags:
+            if trimmed.startswith(tag):
+                return tag
+        return None

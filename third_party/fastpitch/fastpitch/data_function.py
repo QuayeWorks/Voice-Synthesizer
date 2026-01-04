@@ -167,6 +167,10 @@ class TTSDataset(torch.utils.data.Dataset):
                  mel_fmax=None,
                  prepend_space_to_text=False,
                  append_space_to_text=False,
+                 include_style_tokens=True,
+                 style_tags=None,
+                 strip_style_from_text=False,
+                 return_style_id=False,
                  pitch_online_dir=None,
                  betabinomial_online_dir=None,
                  use_betabinomial_interpolator=True,
@@ -193,11 +197,19 @@ class TTSDataset(torch.utils.data.Dataset):
         self.prepend_space_to_text = prepend_space_to_text
         self.append_space_to_text = append_space_to_text
 
+        self.strip_style_from_text = strip_style_from_text
+        self.return_style_id = return_style_id or strip_style_from_text
+        self.include_style_tokens = include_style_tokens
+        self.style_tags = style_tags
+
         assert p_arpabet == 0.0 or p_arpabet == 1.0, (
             'Only 0.0 and 1.0 p_arpabet is currently supported. '
             'Variable probability breaks caching of betabinomial matrices.')
 
-        self.tp = TextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet)
+        self.tp = TextProcessing(symbol_set, text_cleaners, p_arpabet=p_arpabet,
+                                 include_style_tokens=self.include_style_tokens,
+                                 style_tags=self.style_tags,
+                                 strip_style_from_text=self.strip_style_from_text)
         self.n_speakers = n_speakers
         self.pitch_tmp_dir = pitch_online_dir
         self.f0_method = pitch_online_method
@@ -232,7 +244,7 @@ class TTSDataset(torch.utils.data.Dataset):
             speaker = None
 
         mel = self.get_mel(audiopath)
-        text = self.get_text(text)
+        text, style_id = self.get_text(text)
         pitch = self.get_pitch(index, mel.size(-1))
         energy = torch.norm(mel.float(), dim=0, p=2)
         attn_prior = self.get_prior(index, mel.shape[1], text.shape[0])
@@ -254,7 +266,7 @@ class TTSDataset(torch.utils.data.Dataset):
             pitch = pitch[None, :]
 
         return (text, mel, len(text), pitch, energy, speaker, attn_prior,
-                audiopath)
+                audiopath, style_id)
 
     def __len__(self):
         return len(self.audiopaths_and_text)
@@ -280,7 +292,12 @@ class TTSDataset(torch.utils.data.Dataset):
         return melspec
 
     def get_text(self, text):
-        text = self.tp.encode_text(text)
+        encoded = self.tp.encode_text(text, return_style_id=self.return_style_id)
+        if self.return_style_id:
+            text, style_id = encoded
+        else:
+            text, style_id = encoded, None
+
         space = [self.tp.encode_text("A A")[1]]
 
         if self.prepend_space_to_text:
@@ -289,7 +306,7 @@ class TTSDataset(torch.utils.data.Dataset):
         if self.append_space_to_text:
             text = text + space
 
-        return torch.LongTensor(text)
+        return torch.LongTensor(text), style_id
 
     def get_prior(self, index, mel_len, text_len):
 
@@ -414,14 +431,23 @@ class TTSCollate:
 
         audiopaths = [batch[i][7] for i in ids_sorted_decreasing]
 
+        style_ids = None
+        if len(batch[0]) > 8:
+            style_ids = torch.full_like(input_lengths, fill_value=-1)
+            for i in range(len(ids_sorted_decreasing)):
+                sid = batch[ids_sorted_decreasing[i]][8]
+                if sid is not None:
+                    style_ids[i] = int(sid)
+
         return (text_padded, input_lengths, mel_padded, output_lengths, len_x,
                 pitch_padded, energy_padded, speaker, attn_prior_padded,
-                audiopaths)
+                audiopaths, style_ids)
 
 
 def batch_to_gpu(batch):
     (text_padded, input_lengths, mel_padded, output_lengths, len_x,
-     pitch_padded, energy_padded, speaker, attn_prior, audiopaths) = batch
+     pitch_padded, energy_padded, speaker, attn_prior, audiopaths,
+     style_ids) = batch
 
     text_padded = to_gpu(text_padded).long()
     input_lengths = to_gpu(input_lengths).long()
@@ -430,12 +456,16 @@ def batch_to_gpu(batch):
     pitch_padded = to_gpu(pitch_padded).float()
     energy_padded = to_gpu(energy_padded).float()
     attn_prior = to_gpu(attn_prior).float()
+    if style_ids is not None:
+        style_ids = to_gpu(style_ids).long()
     if speaker is not None:
         speaker = to_gpu(speaker).long()
 
     # Alignments act as both inputs and targets - pass shallow copies
     x = [text_padded, input_lengths, mel_padded, output_lengths,
          pitch_padded, energy_padded, speaker, attn_prior, audiopaths]
+    if style_ids is not None:
+        x.append(style_ids)
     y = [mel_padded, input_lengths, output_lengths]
     len_x = torch.sum(output_lengths)
     return (x, y, len_x)

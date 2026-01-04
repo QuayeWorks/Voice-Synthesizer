@@ -11,7 +11,24 @@ from .cmudict import valid_symbols
 _arpabet = ['@' + s for s in valid_symbols]
 
 
-def get_symbols(symbol_set='english_basic'):
+STYLE_TAGS = [
+    '<narration>',
+    '<dialogue>',
+    '<inner>',
+    '<calm>',
+    '<emphasis>',
+    '<angry>',
+    '<shout>',
+    '<whisper>',
+    '<battle>',
+    '<comedy>',
+]
+
+
+def get_symbols(symbol_set='english_basic', include_style_tokens=True, extra_symbols=None):
+    extra_symbols = extra_symbols or []
+    style_tokens = STYLE_TAGS if include_style_tokens else []
+    extra_symbols = list(style_tokens) + [s for s in extra_symbols if s not in style_tokens]
     if symbol_set == 'english_basic':
         _pad = '_'
         _punctuation = '!\'(),.:;? '
@@ -33,6 +50,10 @@ def get_symbols(symbol_set='english_basic'):
         symbols = list(_punctuation + _math + _special + _accented + _letters) + _arpabet
     else:
         raise Exception("{} symbol set does not exist".format(symbol_set))
+
+    for sym in extra_symbols:
+        if sym not in symbols:
+            symbols.append(sym)
 
     return symbols
 
