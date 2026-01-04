@@ -26,10 +26,13 @@ class TextProcessing(object):
                  handle_arpabet='word', handle_arpabet_ambiguous='ignore',
                  expand_currency=True, include_style_tokens=True,
                  style_tags=None, strip_style_from_text=False):
+        self.include_style_tokens = include_style_tokens
         self.style_tags = style_tags or STYLE_TAGS
-        self.strip_style_from_text = strip_style_from_text
+        self.strip_style_from_text = strip_style_from_text or not include_style_tokens
+
+        extra_symbols = self.style_tags if include_style_tokens else None
         self.symbols = get_symbols(symbol_set, include_style_tokens=include_style_tokens,
-                                   extra_symbols=self.style_tags)
+                                   extra_symbols=extra_symbols)
         self.cleaner_names = cleaner_names
 
         # Mappings from symbol to numeric ID and vice versa:
@@ -130,14 +133,14 @@ class TextProcessing(object):
         style_tag, text = self._extract_style_tag(text)
         style_id = None
 
-        if style_tag is not None:
+        if style_tag is not None and self.include_style_tokens:
             style_id = self.symbol_to_id.get(style_tag)
 
         text_encoded, text_clean, text_arpabet = self._encode_main_text(
             text, return_all=True)
 
         sequence = []
-        if style_tag is not None and not self.strip_style_from_text:
+        if style_tag is not None and self.include_style_tokens and not self.strip_style_from_text:
             if style_id is None:
                 raise KeyError(f"Style tag {style_tag} missing from symbols list")
             sequence.append(style_id)
