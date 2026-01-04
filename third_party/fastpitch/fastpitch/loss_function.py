@@ -29,8 +29,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-from common.utils import mask_from_lens
-from fastpitch.attn_loss_function import AttentionCTCLoss
+from ..common.utils import mask_from_lens
+from .attn_loss_function import AttentionCTCLoss
 
 
 class FastPitchLoss(nn.Module):

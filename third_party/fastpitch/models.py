@@ -27,9 +27,9 @@
 
 import torch
 
-from common.text.symbols import get_symbols, get_pad_idx
-from fastpitch.model import FastPitch
-from fastpitch.model_jit import FastPitchJIT
+from .common.text.symbols import get_symbols, get_pad_idx
+from .fastpitch.model import FastPitch
+from .fastpitch.model_jit import FastPitchJIT
 
 # NOTE:
 # WaveGlow support has been intentionally removed from this project.
@@ -47,7 +47,7 @@ def _waveglow_removed_error():
 def parse_model_args(model_name, parser, add_help=False):
     # Keep FastPitch only
     if model_name == "FastPitch":
-        from fastpitch.arg_parser import parse_fastpitch_args
+        from .fastpitch.arg_parser import parse_fastpitch_args
         return parse_fastpitch_args(parser, add_help)
 
     # Explicit error for legacy paths

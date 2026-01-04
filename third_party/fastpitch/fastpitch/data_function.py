@@ -37,9 +37,9 @@ import torch.nn.functional as F
 from scipy import ndimage
 from scipy.stats import betabinom
 
-import common.layers as layers
-from common.text.text_processing import TextProcessing
-from common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
+from ..common import layers
+from ..common.text.text_processing import TextProcessing
+from ..common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
 
 def beta_binomial_prior_distribution(phoneme_count, mel_count, scaling=1.0):
     P = phoneme_count

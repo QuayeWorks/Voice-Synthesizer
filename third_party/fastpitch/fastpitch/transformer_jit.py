@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from common.utils import mask_from_lens
+from ..common.utils import mask_from_lens
 
 
 class PositionalEmbedding(nn.Module):

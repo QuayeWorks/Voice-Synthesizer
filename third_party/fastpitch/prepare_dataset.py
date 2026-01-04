@@ -39,7 +39,7 @@ import dllogger as DLLogger
 from dllogger import StdOutBackend, JSONStreamBackend, Verbosity
 from torch.utils.data import DataLoader
 
-from fastpitch.data_function import TTSCollate, TTSDataset
+from .fastpitch.data_function import TTSCollate, TTSDataset
 
 
 def parse_args(parser):
