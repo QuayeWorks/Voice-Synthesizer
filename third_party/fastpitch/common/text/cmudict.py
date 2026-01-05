@@ -1,5 +1,7 @@
 """ from https://github.com/keithito/tacotron """
 
+import importlib.resources
+import importlib.util
 import re
 from pathlib import Path
 from urllib.request import urlopen
@@ -17,7 +19,12 @@ valid_symbols = [
 
 _valid_symbol_set = set(valid_symbols)
 
-CMUDICT_URL = "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict-0.7b"
+CMUDICT_URLS = [
+  # Primary source maintained by CMU Sphinx
+  "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict-0.7b",
+  # Mirror that remains stable when the primary is unreachable
+  "https://raw.githubusercontent.com/Alexir/CMUdict/master/cmudict-0.7b",
+]
 
 
 def _download_cmudict(target: Path):
@@ -25,10 +32,33 @@ def _download_cmudict(target: Path):
   target.parent.mkdir(parents=True, exist_ok=True)
 
   print(f"CMUdict missing at {target}. Attempting download…")
-  with urlopen(CMUDICT_URL) as response:
-    target.write_bytes(response.read())
 
-  print("CMUdict download complete.")
+  errors = []
+  for url in CMUDICT_URLS:
+    try:
+      with urlopen(url) as response:
+        target.write_bytes(response.read())
+      print(f"CMUdict download complete from {url}.")
+      return
+    except Exception as exc:  # pragma: no cover - defensive fallback
+      errors.append(f"{url} ({exc})")
+
+  # Fallback: use the PyPI cmudict package if it is already installed.
+  spec = importlib.util.find_spec("cmudict")
+  if spec is not None:
+    resource_root = importlib.resources.files("cmudict")
+    for resource_name in ("cmudict-0.7b", "cmudict.dict"):
+      resource = resource_root / resource_name
+      if resource.is_file():
+        target.write_bytes(resource.read_bytes())
+        print(f"CMUdict copied from installed 'cmudict' package ({resource_name}).")
+        return
+    errors.append("Installed 'cmudict' package does not contain a usable dictionary file.")
+  else:
+    errors.append("PyPI package 'cmudict' is not installed.")
+
+  error_report = "\n  - ".join(errors)
+  raise RuntimeError(f"Failed to obtain CMUdict. Tried:\n  - {error_report}")
 
 
 def lines_to_list(filename):
@@ -67,7 +97,7 @@ class CMUDict:
           print(f"Error: {exc}")
           print()
           print("You can manually download the CMU Pronouncing Dictionary from:")
-          print(f"  {CMUDICT_URL}")
+          print(f"  {CMUDICT_URLS[0]}")
           print(f"and place it at: {file_or_path}")
           import sys
           sys.exit(1)
