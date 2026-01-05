@@ -540,8 +540,88 @@ class MainWindow(QtWidgets.QWidget):
             QtWidgets.QMessageBox.critical(self, "Error", message)
 
 
+def _run_cli(argv: Sequence[str]) -> bool:
+    """Run the pipeline in a headless CLI mode when requested.
+
+    Returns True if CLI mode handled execution, False otherwise.
+    """
+
+    if "--cli" not in argv:
+        return False
+
+    parser = argparse.ArgumentParser(
+        description="FastPitch + HiFi-GAN CLI (pass --cli to enable)", allow_abbrev=False
+    )
+    parser.add_argument("--cli", action="store_true", help="Run without the GUI")
+    parser.add_argument("-i", "--input", required=True, help="Text file with one line per utterance")
+    parser.add_argument("--fastpitch", required=True, help="Path to FastPitch checkpoint")
+    parser.add_argument("--hifigan", required=True, help="Path to HiFi-GAN checkpoint")
+    parser.add_argument("--hifigan-config", required=True, help="Path to HiFi-GAN config JSON")
+    parser.add_argument("-o", "--output", default=str(BASE_DIR / "inference"), help="Output folder root")
+    parser.add_argument("--cuda", action="store_true", help="Use CUDA if available")
+    parser.add_argument("--amp", action="store_true", help="Use AMP for FastPitch")
+    parser.add_argument("--pace", type=float, default=1.0, help="Speaking pace multiplier")
+    parser.add_argument("--batch-size", type=int, default=4, help="Batch size for FastPitch")
+    parser.add_argument("--save-mels", action="store_true", help="Save intermediate mel .npy files")
+    parser.add_argument("--pitch-flatten", action="store_true", help="Flatten pitch contours")
+    parser.add_argument("--pitch-invert", action="store_true", help="Invert pitch contours")
+    parser.add_argument("--pitch-amplify", type=float, default=1.0, help="Amplify pitch variation")
+    parser.add_argument("--pitch-shift", type=float, default=0.0, help="Shift pitch in Hz")
+    parser.add_argument(
+        "--pitch-custom",
+        action="store_true",
+        help="Enable custom transform from third_party/fastpitch/pitch_transform.py",
+    )
+
+    args = parser.parse_args(argv[1:])
+
+    input_path = Path(args.input)
+    if not input_path.is_file():
+        raise FileNotFoundError(f"Input text file not found: {input_path}")
+
+    lines = [ln.strip() for ln in input_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    if not lines:
+        raise ValueError("Input text file is empty after stripping blank lines")
+
+    cmudict.initialize(str(BASE_DIR / "third_party/fastpitch/cmudict/cmudict-0.7b"), keep_ambiguous=True)
+
+    pitch = PitchSettings(
+        flatten=args.pitch_flatten,
+        invert=args.pitch_invert,
+        amplify=args.pitch_amplify,
+        shift_hz=args.pitch_shift,
+        custom=args.pitch_custom,
+    )
+
+    wavs = run_pipeline(
+        text_lines=lines,
+        fastpitch_ckpt=Path(args.fastpitch),
+        hifigan_ckpt=Path(args.hifigan),
+        hifigan_cfg=Path(args.hifigan_config),
+        output_root=Path(args.output),
+        use_cuda=args.cuda,
+        use_amp=args.amp,
+        pace=args.pace,
+        pitch=pitch,
+        save_mels=args.save_mels,
+        batch_size=args.batch_size,
+        progress=lambda msg: print(msg, file=sys.stderr),
+    )
+
+    for path in wavs:
+        print(path)
+
+    return True
+
+
 def main():
-    app = QtWidgets.QApplication(sys.argv)
+    if _run_cli(sys.argv):
+        return
+
+    # Ensure Qt doesn't try to interpret CLI-only arguments
+    qt_argv = [sys.argv[0]]
+
+    app = QtWidgets.QApplication(qt_argv)
     window = MainWindow()
     window.resize(800, 650)
     window.show()
