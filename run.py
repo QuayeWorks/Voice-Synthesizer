@@ -17,6 +17,16 @@ Features
 """
 from __future__ import annotations
 
+import sys
+import os
+
+# ------------------------------------------------------------------
+# CRITICAL FIX:
+# FastPitch parses CLI args at *import time*.
+# When running a GUI, we must strip argv BEFORE importing FastPitch.
+# ------------------------------------------------------------------
+sys.argv = [sys.argv[0]]
+
 import argparse
 import datetime as dt
 from dataclasses import dataclass
@@ -30,14 +40,18 @@ import numpy as np
 import torch
 from scipy.io.wavfile import write
 
+
 def _configure_qt_platform():
     """Pick a sensible Qt platform plugin based on the environment.
 
-    - Respect an explicit QT_QPA_PLATFORM provided by the user.
-    - Prefer the Wayland backend on WSLg/Wayland systems to avoid xcb
-      dependency issues.
-    - If X11 is available, let Qt choose its default (usually xcb).
-    - Fall back to the offscreen plugin in headless environments.
+    Goal: avoid the common "Could not load the Qt platform plugin xcb" crash,
+    especially on WSL/WSLg and minimal installs.
+
+    Rules:
+    - If QT_QPA_PLATFORM is explicitly set, respect it.
+    - If WAYLAND_DISPLAY is set (WSLg/Wayland), prefer the Wayland backend.
+    - Else if DISPLAY is set (X11), let Qt choose its default (typically xcb).
+    - Else (headless), force the offscreen backend.
     """
 
     if os.getenv("QT_QPA_PLATFORM"):
@@ -55,13 +69,13 @@ def _configure_qt_platform():
 
 _configure_qt_platform()
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
 # FastPitch + HiFi-GAN imports
-from third_party.fastpitch import inference as fp_infer
-from third_party.fastpitch.common.text import cmudict
-from third_party.hifigan.env import AttrDict
-from third_party.hifigan.models import Generator
+from third_party.fastpitch import inference as fp_infer  # noqa: E402
+from third_party.fastpitch.common.text import cmudict  # noqa: E402
+from third_party.hifigan.env import AttrDict  # noqa: E402
+from third_party.hifigan.models import Generator  # noqa: E402
 
 BASE_DIR = Path(__file__).parent.resolve()
 
@@ -84,6 +98,7 @@ class FastPitchOutput:
 
 # ------------------------- Inference helpers ------------------------- #
 
+
 def _build_pitch_transform(settings: PitchSettings):
     dummy_parser = argparse.Namespace(
         pitch_transform_flatten=settings.flatten,
@@ -96,9 +111,25 @@ def _build_pitch_transform(settings: PitchSettings):
 
 
 def _prepare_fastpitch_model(ckpt: Path, device: torch.device, use_amp: bool):
+    """Load FastPitch without requiring CLI args.
+
+    NOTE: third_party.fastpitch.inference.parse_args() defines required CLI flags
+    (e.g., -i/--input and --fastpitch). When we call argparse with an empty argv
+    inside the GUI, argparse exits with a usage error.
+
+    To keep using FastPitch's helper utilities (EMA/torchscript flags, etc.)
+    while running from the GUI, we pass a minimal dummy argv that satisfies
+    those required arguments. The GUI still controls the actual checkpoint
+    path via the `ckpt` parameter passed into load_and_setup_model().
+    """
     parser = argparse.ArgumentParser(allow_abbrev=False)
     parser = fp_infer.parse_args(parser)
-    args, unk_args = parser.parse_known_args([])
+
+    # Provide minimal required CLI args so argparse doesn't error out when running
+    # from the GUI. These values are not used for synthesis in the GUI path.
+    dummy_argv = ["-i", "__gui_input_unused__", "--fastpitch", str(ckpt)]
+    args, unk_args = parser.parse_known_args(dummy_argv)
+
     args.amp = use_amp
     model = fp_infer.load_and_setup_model(
         "FastPitch",
@@ -108,8 +139,8 @@ def _prepare_fastpitch_model(ckpt: Path, device: torch.device, use_amp: bool):
         device,
         unk_args=unk_args,
         forward_is_infer=True,
-        ema=args.ema,
-        jitable=args.torchscript,
+        ema=getattr(args, "ema", False),
+        jitable=getattr(args, "torchscript", False),
     )
     return model
 
@@ -377,6 +408,11 @@ class MainWindow(QtWidgets.QWidget):
         self.fastpitch_edit = QtWidgets.QLineEdit()
         self.hifigan_edit = QtWidgets.QLineEdit()
         self.hifigan_cfg_edit = QtWidgets.QLineEdit()
+
+        # FIX: create this before using it
+        self.input_file_edit = QtWidgets.QLineEdit()
+        self.input_file_edit.setPlaceholderText("Path to phrases .txt file (one line per phrase)")
+
         default_out = (BASE_DIR / "inference").resolve()
         self.output_edit = QtWidgets.QLineEdit(str(default_out))
 
@@ -422,6 +458,7 @@ class MainWindow(QtWidgets.QWidget):
             ("FastPitch checkpoint", self.fastpitch_edit, self.browse_model),
             ("HiFi-GAN checkpoint", self.hifigan_edit, self.browse_hifigan),
             ("HiFi-GAN config", self.hifigan_cfg_edit, self.browse_hifigan_cfg),
+            ("Phrases file (-i)", self.input_file_edit, self.browse_input_file),
             ("Output directory", self.output_edit, self.browse_output),
         ):
             layout.addRow(label, self._row(widget, handler))
@@ -466,6 +503,17 @@ class MainWindow(QtWidgets.QWidget):
         container.setLayout(h)
         return container
 
+    def browse_input_file(self):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self,
+            "Select phrases text file",
+            str(BASE_DIR),
+            "Text files (*.txt)",
+        )
+        if path:
+            self.input_file_edit.setText(path)
+            self._save_settings()
+
     def browse_model(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select FastPitch checkpoint", str(BASE_DIR))
         if path:
@@ -501,23 +549,55 @@ class MainWindow(QtWidgets.QWidget):
         fastpitch = Path(self.fastpitch_edit.text()).resolve()
         hifigan = Path(self.hifigan_edit.text()).resolve()
         hifigan_cfg = Path(self.hifigan_cfg_edit.text()).resolve()
-        output_dir = Path(self.output_edit.text()).resolve() if self.output_edit.text() else (BASE_DIR / "inference").resolve()
+        output_dir = (
+            Path(self.output_edit.text()).resolve()
+            if self.output_edit.text()
+            else (BASE_DIR / "inference").resolve()
+        )
 
         missing = [p for p in (fastpitch, hifigan, hifigan_cfg) if not p.is_file()]
         if missing:
             self.log(f"Missing paths: {', '.join(str(m) for m in missing)}")
             return
 
-        text = self.text_edit.toPlainText()
-        if not text.strip():
-            self.log("Please enter text to synthesize.")
-            return
+        # Build the synthesis lines from either:
+        #  - phrases file (-i), if provided
+        #  - text box, otherwise
+        input_file = self.input_file_edit.text().strip()
+        if input_file:
+            input_path = Path(input_file).expanduser().resolve()
+            if not input_path.is_file():
+                self.log(f"Phrases file not found: {input_path}")
+                return
+
+            lines = [
+                ln.strip()
+                for ln in input_path.read_text(encoding="utf-8").splitlines()
+                if ln.strip()
+            ]
+            if not lines:
+                self.log("Phrases file is empty (after stripping blank lines).")
+                return
+
+            # FIX: define text for worker (worker expects a string)
+            text = "\n".join(lines)
+        else:
+            text = self.text_edit.toPlainText()
+            if not text.strip():
+                self.log("Please enter text or select a phrases file (-i).")
+                return
+
+            lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+            if not lines:
+                self.log("No non-empty lines to synthesize.")
+                return
 
         self._save_settings()
         self.log("Using paths:")
         self.log(f"  FastPitch: {fastpitch}")
         self.log(f"  HiFi-GAN checkpoint: {hifigan}")
         self.log(f"  HiFi-GAN config: {hifigan_cfg}")
+        self.log(f"  Phrases file (-i): {input_file if input_file else '(text box)'}")
         self.log(f"  Output directory: {output_dir}")
 
         pitch = PitchSettings(
@@ -550,6 +630,10 @@ class MainWindow(QtWidgets.QWidget):
         self.fastpitch_edit.setText(self.settings.value("fastpitch", ""))
         self.hifigan_edit.setText(self.settings.value("hifigan", ""))
         self.hifigan_cfg_edit.setText(self.settings.value("hifigan_cfg", ""))
+
+        # FIX: load phrases file (-i)
+        self.input_file_edit.setText(self.settings.value("input_file", ""))
+
         saved_output = self.settings.value("output", "")
         if saved_output:
             self.output_edit.setText(saved_output)
@@ -570,6 +654,10 @@ class MainWindow(QtWidgets.QWidget):
         self.settings.setValue("fastpitch", self.fastpitch_edit.text())
         self.settings.setValue("hifigan", self.hifigan_edit.text())
         self.settings.setValue("hifigan_cfg", self.hifigan_cfg_edit.text())
+
+        # FIX: save phrases file (-i)
+        self.settings.setValue("input_file", self.input_file_edit.text())
+
         self.settings.setValue("output", self.output_edit.text())
         self.settings.setValue("cuda", self.cuda_check.isChecked())
         self.settings.setValue("amp", self.amp_check.isChecked())
@@ -584,7 +672,6 @@ class MainWindow(QtWidgets.QWidget):
 
     def closeEvent(self, event):  # noqa: N802,D401
         """Persist settings when the window is closed."""
-
         self._save_settings()
         super().closeEvent(event)
 
@@ -597,17 +684,20 @@ class MainWindow(QtWidgets.QWidget):
 
 
 def _run_cli(argv: Sequence[str]) -> bool:
-    """Run the pipeline in a headless CLI mode when requested.
+    """Run the pipeline in a headless CLI mode when explicitly requested.
+
+    IMPORTANT: We only enter CLI mode when the user passes --cli.
+    This prevents accidental argparse errors when you simply run: `python run.py`
+    (which should launch the GUI).
 
     Returns True if CLI mode handled execution, False otherwise.
     """
 
-    cli_triggers = {"--cli", "-i", "--input", "--fastpitch", "--hifigan", "--hifigan-config"}
-    if not any(flag in argv for flag in cli_triggers):
+    if "--cli" not in argv:
         return False
 
     parser = argparse.ArgumentParser(
-        description="FastPitch + HiFi-GAN CLI (GUI is the default; pass CLI args to use this mode)",
+        description="FastPitch + HiFi-GAN CLI (GUI is the default; pass --cli to use this mode)",
         allow_abbrev=False,
     )
     parser.add_argument("--cli", action="store_true", help="Run without the GUI")

@@ -32,9 +32,14 @@ used cleanly in a modular pipeline:
 
     Text -> FastPitch -> Mel (.npy) -> HiFi-GAN -> WAV
 
-Use:
-    python third_party\fastpitch\inference.py -i phrases\my_lines.txt -o inference\mels --cuda \
+Use (CLI):
+    python third_party\\fastpitch\\inference.py -i phrases\\my_lines.txt -o inference\\mels --cuda \
         --fastpitch <FASTPITCH_CKPT> --save-mels
+
+NOTE (Library/GUI use):
+- This module can be imported and used by other Python code (e.g., a PyQt GUI).
+- In that case, we must NOT require CLI-only flags at import-time or when
+  helper functions call argparse. Required CLI flags are enforced only in main().
 """
 
 import argparse
@@ -64,12 +69,19 @@ from .pitch_transform import pitch_transform_custom
 
 
 def parse_args(parser):
-    """Parse commandline arguments."""
+    """Define commandline arguments.
+
+    IMPORTANT:
+    - We DO NOT mark -i/--input and --fastpitch as required here, so that this
+      module can be imported and used as a library (e.g., by a GUI) without
+      argparse aborting.
+    - CLI requirements are enforced in main().
+    """
     parser.add_argument(
         "-i",
         "--input",
         type=str,
-        required=True,
+        default=None,   # was required=True
         help="Full path to the input text (phrases separated by newlines). "
              "Also supports .tsv with a header row.",
     )
@@ -86,7 +98,7 @@ def parse_args(parser):
     parser.add_argument(
         "--fastpitch",
         type=str,
-        required=True,
+        default=None,   # was required=True
         help="Full path to the FastPitch checkpoint file (use SKIP to load ground-truth mels from TSV).",
     )
     parser.add_argument("--amp", action="store_true", help="Inference with AMP")
@@ -179,11 +191,22 @@ def load_and_setup_model(
     ema=True,
     jitable=False,
 ):
+    """Library-safe model loader.
+
+    IMPORTANT FIX:
+    - Do NOT parse real sys.argv here. Some embedding apps (GUIs) will import
+      this module and call load_and_setup_model, and sys.argv may not include
+      FastPitch CLI flags.
+    - We parse model args from an empty argv so argparse never aborts.
+    """
     if unk_args is None:
         unk_args = []
 
     model_parser = models.parse_model_args(model_name, parser, add_help=False)
-    model_args, model_unk_args = model_parser.parse_known_args()
+
+    # FIX: do not read sys.argv
+    model_args, model_unk_args = model_parser.parse_known_args([])
+
     # Keep only the unknown args that the model parser also considers unknown
     unk_args[:] = list(set(unk_args) & set(model_unk_args))
 
@@ -319,10 +342,14 @@ class MeasureTime(list):
 
 
 def main():
-    """Launches FastPitch inference (text -> mel)."""
+    """Launches FastPitch inference (text -> mel) CLI."""
     parser = argparse.ArgumentParser(description="PyTorch FastPitch Inference (mel-only)", allow_abbrev=False)
     parser = parse_args(parser)
     args, unk_args = parser.parse_known_args()
+
+    # ENFORCE REQUIRED ARGS ONLY FOR CLI
+    if args.input is None or args.fastpitch is None:
+        parser.error("the following arguments are required: -i/--input, --fastpitch")
 
     if args.p_arpabet > 0.0:
         cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
@@ -427,12 +454,10 @@ def main():
                 log(rep, {"fastpitch_latency": gen_measures[-1]})
 
                 if args.save_mels:
-                    # Keep a monotonically increasing index across all batches
                     if "global_mel_idx" not in locals():
                         global_mel_idx = 0
 
                     for i, mel_ in enumerate(mel):
-                        # Save as (T, n_mels)
                         m = mel_[:, : mel_lens[i].item()].permute(1, 0)
 
                         if "output" in b:
@@ -445,7 +470,6 @@ def main():
                         np.save(mel_path, m.cpu().numpy())
 
                         global_mel_idx += 1
-
 
     # Summary stats (FastPitch only)
     if generator is not None and len(gen_measures) > 0:
