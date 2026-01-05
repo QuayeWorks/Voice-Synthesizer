@@ -105,7 +105,8 @@ def get_model_config(model_name, args):
                 get_symbols(
                     args.symbol_set,
                     include_style_tokens=True,
-                    extra_symbols=args.style_tags,
+                    extra_symbols=None,
+                    style_tags=args.style_tags,
                 )
             ),
             padding_idx=get_pad_idx(args.symbol_set),

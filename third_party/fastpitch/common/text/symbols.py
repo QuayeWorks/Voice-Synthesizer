@@ -12,22 +12,28 @@ _arpabet = ['@' + s for s in valid_symbols]
 
 
 STYLE_TAGS = [
-    '<narration>',
-    '<dialogue>',
-    '<inner>',
-    '<calm>',
-    '<emphasis>',
-    '<angry>',
-    '<shout>',
-    '<whisper>',
-    '<battle>',
-    '<comedy>',
+    "<narration>",
+    "<dialogue>",
+    "<inner>",
+    "<calm>",
+    "<emphasis>",
+    "<angry>",
+    "<shout>",
+    "<whisper>",
+    "<battle>",
+    "<comedy>",
 ]
 
 
-def get_symbols(symbol_set='english_basic', include_style_tokens=True, extra_symbols=None):
+def get_symbols(
+    symbol_set="english_basic",
+    include_style_tokens=True,
+    extra_symbols=None,
+    style_tags=None,
+):
     extra_symbols = extra_symbols or []
-    style_tokens = STYLE_TAGS if include_style_tokens else []
+    active_style_tags = style_tags or STYLE_TAGS
+    style_tokens = active_style_tags if include_style_tokens else []
     extra_symbols = list(style_tokens) + [s for s in extra_symbols if s not in style_tokens]
     if symbol_set == 'english_basic':
         _pad = '_'

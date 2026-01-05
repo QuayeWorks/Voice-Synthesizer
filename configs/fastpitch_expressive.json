@@ -1,0 +1,38 @@
+{
+  "tokenizer": {
+    "symbol_set": "english_basic",
+    "text_cleaners": ["english_cleaners_v2"],
+    "include_style_tokens": true,
+    "style_tags": [
+      "<narration>",
+      "<dialogue>",
+      "<inner>",
+      "<calm>",
+      "<emphasis>",
+      "<angry>",
+      "<shout>",
+      "<whisper>",
+      "<battle>",
+      "<comedy>"
+    ],
+    "strip_style_from_text": false,
+    "p_arpabet": 0.0,
+    "n_symbols": 158
+  },
+  "training": {
+    "dataset_path": "datasets",
+    "batch_size": 16,
+    "learning_rate": 0.0005,
+    "epochs": 150,
+    "epochs_per_checkpoint": 10,
+    "grad_accumulation": 1,
+    "amp": true,
+    "cudnn_benchmark": true,
+    "warmup_steps": 1000,
+    "dur_loss_scale": 1.0,
+    "pitch_loss_scale": 1.0,
+    "attn_loss_scale": 1.0,
+    "n_speakers": 1,
+    "seed": 42
+  }
+}

@@ -28,8 +28,12 @@ class TextProcessing(object):
                  style_tags=None, strip_style_from_text=False):
         self.style_tags = style_tags or STYLE_TAGS
         self.strip_style_from_text = strip_style_from_text
-        self.symbols = get_symbols(symbol_set, include_style_tokens=include_style_tokens,
-                                   extra_symbols=self.style_tags)
+        self.symbols = get_symbols(
+            symbol_set,
+            include_style_tokens=include_style_tokens,
+            extra_symbols=None,
+            style_tags=self.style_tags,
+        )
         self.cleaner_names = cleaner_names
 
         # Mappings from symbol to numeric ID and vice versa:

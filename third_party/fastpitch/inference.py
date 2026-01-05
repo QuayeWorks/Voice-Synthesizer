@@ -64,6 +64,7 @@ from .common.tb_dllogger import (
     unique_log_fpath,
 )
 from .common.text import cmudict
+from .common.text.symbols import STYLE_TAGS, get_symbols
 from .common.text.text_processing import TextProcessing
 from .pitch_transform import pitch_transform_custom
 
@@ -125,7 +126,7 @@ def parse_args(parser):
     parser.add_argument(
         "--style-tags",
         nargs="*",
-        default=None,
+        default=STYLE_TAGS,
         help="Optional override list of supported style tags",
     )
 
@@ -350,6 +351,16 @@ def main():
     # ENFORCE REQUIRED ARGS ONLY FOR CLI
     if args.input is None or args.fastpitch is None:
         parser.error("the following arguments are required: -i/--input, --fastpitch")
+
+    symbol_table = get_symbols(
+        args.symbol_set, include_style_tokens=True, style_tags=args.style_tags
+    )
+    print(
+        "Tokenizer: "
+        f"symbol_set={args.symbol_set} (n_symbols={len(symbol_table)}) | "
+        f"text_cleaners={', '.join(args.text_cleaners)} | "
+        f"style_tags={len(args.style_tags)} locked tags"
+    )
 
     if args.p_arpabet > 0.0:
         cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
