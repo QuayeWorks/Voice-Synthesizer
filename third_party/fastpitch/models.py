@@ -27,9 +27,9 @@
 
 import torch
 
-from .common.text.symbols import get_symbols, get_pad_idx
-from .fastpitch.model import FastPitch
-from .fastpitch.model_jit import FastPitchJIT
+from third_party.fastpitch.common.text.symbols import get_pad_idx, get_symbols
+from third_party.fastpitch.fastpitch.model import FastPitch
+from third_party.fastpitch.fastpitch.model_jit import FastPitchJIT
 
 # NOTE:
 # WaveGlow support has been intentionally removed from this project.
