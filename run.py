@@ -30,9 +30,10 @@ import numpy as np
 import torch
 from scipy.io.wavfile import write
 
-# Allow headless environments to use the offscreen Qt platform plugin when no
-# display is available. This must run before importing PyQt5.
-if not os.getenv("QT_QPA_PLATFORM") and not os.getenv("DISPLAY"):
+# Prefer the offscreen Qt plugin by default so the app can run in environments
+# without the xcb dependencies. Users can override by setting
+# QT_QPA_PLATFORM explicitly (e.g., to "xcb" when a display is available).
+if not os.getenv("QT_QPA_PLATFORM"):
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
 from PyQt5 import QtCore, QtWidgets
