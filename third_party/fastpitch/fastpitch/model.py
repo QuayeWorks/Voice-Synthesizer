@@ -31,8 +31,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..common.layers import ConvReLUNorm
-from ..common.utils import mask_from_lens
+from third_party.fastpitch.common.layers import ConvReLUNorm
+from third_party.fastpitch.common.utils import mask_from_lens
 from .alignment import b_mas, mas_width1
 from .attention import ConvAttention
 from .transformer import FFTransformer
