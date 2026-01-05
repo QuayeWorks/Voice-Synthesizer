@@ -1,6 +1,8 @@
 """ from https://github.com/keithito/tacotron """
 
 import re
+from pathlib import Path
+from urllib.request import urlopen
 
 
 valid_symbols = [
@@ -14,6 +16,19 @@ valid_symbols = [
 ]
 
 _valid_symbol_set = set(valid_symbols)
+
+CMUDICT_URL = "https://raw.githubusercontent.com/cmusphinx/cmudict/master/cmudict-0.7b"
+
+
+def _download_cmudict(target: Path):
+  target = Path(target)
+  target.parent.mkdir(parents=True, exist_ok=True)
+
+  print(f"CMUdict missing at {target}. Attempting download…")
+  with urlopen(CMUDICT_URL) as response:
+    target.write_bytes(response.read())
+
+  print("CMUdict download complete.")
 
 
 def lines_to_list(filename):
@@ -37,18 +52,25 @@ class CMUDict:
       self.heteronyms = set(lines_to_list(heteronyms_path))
 
   def initialize(self, file_or_path, keep_ambiguous=True):
-    if isinstance(file_or_path, str):
+    if isinstance(file_or_path, (str, Path)):
+      file_or_path = Path(file_or_path)
       try:
         with open(file_or_path, encoding='latin-1') as f:
           entries = _parse_cmudict(f)
       except FileNotFoundError:
-        print("CMUdict missing. Download with")
-        print()
-        print("    bash scripts/download_cmudict.sh")
-        print()
-        print("and re-run the script.")
-        import sys
-        sys.exit(0)
+        try:
+          _download_cmudict(file_or_path)
+          with open(file_or_path, encoding='latin-1') as f:
+            entries = _parse_cmudict(f)
+        except Exception as exc:  # pragma: no cover - defensive fallback
+          print("Failed to automatically download CMUdict.")
+          print(f"Error: {exc}")
+          print()
+          print("You can manually download the CMU Pronouncing Dictionary from:")
+          print(f"  {CMUDICT_URL}")
+          print(f"and place it at: {file_or_path}")
+          import sys
+          sys.exit(1)
     else:
       entries = _parse_cmudict(file_or_path)
     if not keep_ambiguous:
