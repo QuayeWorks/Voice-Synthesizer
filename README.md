@@ -1,12 +1,12 @@
-# Voice Synthesizer (FastPitch + HiFi-GAN)
+# Voice Synthesizer (QWPitch + QWGAN)
 
-This repository is trimmed to a FastPitch (text→mel) + HiFi-GAN (mel→wav) pipeline with a lightweight PyQt5 GUI (`run.py`).
+This repository is trimmed to a QWPitch (text→mel) + QWGAN (mel→wav) pipeline with a lightweight PyQt5 GUI (`run.py`).
 
 ## What's inside
-- **FastPitch** training and inference (`third_party/fastpitch`).
-- **HiFi-GAN** vocoder and configs (`third_party/hifigan`).
+- **QWPitch** training and inference (`third_party/fastpitch`).
+- **QWGAN** vocoder and configs (`third_party/hifigan`).
 - Minimal helper scripts in `tools/` and assets under `inference/`.
-- A simplified GUI (`run.py`) that shells out to the FastPitch/HiFi-GAN CLIs.
+- A simplified GUI (`run.py`) that shells out to the QWPitch/QWGAN CLIs.
 - Legacy utilities quarantined under `deprecated/`.
 
 ## Quickstart
@@ -38,7 +38,7 @@ python third_party/fastpitch/prepare_dataset.py \
   --extract-mels --extract-pitch
 ```
 
-### 2) Train FastPitch
+### 2) Train QWPitch
 ```bash
 # Single GPU (simplest)
 python third_party/fastpitch/train.py \
@@ -58,19 +58,19 @@ torchrun --nproc_per_node=2 --master_port=29501 third_party/fastpitch/train.py \
 ```
 Adjust epochs/batch size as hardware allows. Use `--resume` (or `--checkpoint-path`) to continue training from the latest checkpoint.
 
-### 3) FastPitch inference (text → mel)
+### 3) QWPitch inference (text → mel)
 ```bash
 python third_party/fastpitch/inference.py \
   -i inference/phrases/my_lines.txt \
   -o inference/mels \
   --save-mels \
-  --fastpitch checkpoints/fastpitch/FastPitch_checkpoint_100.pt \
+  --fastpitch checkpoints/fastpitch/QWPitch_checkpoint_100.pt \
   --cuda \
   --batch-size 1
 ```
 This writes `.npy` mel files under `inference/mels`. Add `--pace <float>` to adjust speaking speed.
 
-### 4) HiFi-GAN vocoding (mel → wav)
+### 4) QWGAN vocoding (mel → wav)
 ```bash
 # Single mel -> wav
 python tools/mel_to_wav_hifigan.py \
@@ -88,7 +88,7 @@ python tools/mel_to_wav_hifigan.py \
   --out inference/wavs \
   --cuda
 ```
-Replace checkpoint/config paths with your trained HiFi-GAN assets.
+Replace checkpoint/config paths with your trained QWGAN assets.
 
 ### 5) GUI
 
@@ -102,12 +102,12 @@ Launch the GUI:
 python run.py
 ```
 
-In the window, choose your FastPitch checkpoint, HiFi-GAN generator + config, output directory, and paste one phrase per line. Optional controls include pace, pitch transforms, CUDA/AMP toggles, mel saving, and batch size. Outputs are written to `<output>/mels/*.npy` (when enabled) and `<output>/wavs/*.wav` with unique filenames.
+In the window, choose your QWPitch checkpoint, QWGAN generator + config, output directory, and paste one phrase per line. Optional controls include pace, pitch transforms, CUDA/AMP toggles, mel saving, and batch size. Outputs are written to `<output>/mels/*.npy` (when enabled) and `<output>/wavs/*.wav` with unique filenames.
 
 > **Note:** If the CMU Pronouncing Dictionary file (`third_party/fastpitch/cmudict/cmudict-0.7b`) is missing, the GUI will download it automatically the first time phoneme conversion is needed. Offline environments can manually place the file at that path from https://github.com/cmusphinx/cmudict.
 
 ## KEEP vs REMOVED (quarantined)
-- **Kept:** FastPitch + HiFi-GAN code, minimal helper scripts (`tools/`), GUI (`run.py`), inference assets, checkpoints folder structure.
+- **Kept:** QWPitch + QWGAN code, minimal helper scripts (`tools/`), GUI (`run.py`), inference assets, checkpoints folder structure.
 - **Quarantined:** Tacotron2/WaveGlow inference script and legacy config (`deprecated/`), unused debug/inspection utilities (`deprecated/tools`), old logs and placeholder inference files, Python `__pycache__` outputs.
 
 ## Notes

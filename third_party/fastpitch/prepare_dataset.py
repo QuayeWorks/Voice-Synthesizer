@@ -85,7 +85,7 @@ def parse_args(parser):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='FastPitch Data Pre-processing')
+    parser = argparse.ArgumentParser(description='QWPitch Data Pre-processing')
     parser = parse_args(parser)
     args, unk_args = parser.parse_known_args()
     if len(unk_args) > 0:

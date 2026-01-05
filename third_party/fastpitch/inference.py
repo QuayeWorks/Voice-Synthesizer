@@ -25,12 +25,12 @@
 #
 # *****************************************************************************
 
-"""FastPitch inference (text -> mel) ONLY.
+"""QWPitch inference (text -> mel) ONLY.
 
 This file was patched to remove all Tacotron2/WaveGlow-specific paths so it can be
 used cleanly in a modular pipeline:
 
-    Text -> FastPitch -> Mel (.npy) -> HiFi-GAN -> WAV
+    Text -> QWPitch -> Mel (.npy) -> QWGAN -> WAV
 
 Use (CLI):
     python third_party\\fastpitch\\inference.py -i phrases\\my_lines.txt -o inference\\mels --cuda \
@@ -100,7 +100,7 @@ def parse_args(parser):
         "--fastpitch",
         type=str,
         default=None,   # was required=True
-        help="Full path to the FastPitch checkpoint file (use SKIP to load ground-truth mels from TSV).",
+        help="Full path to the QWPitch checkpoint file (use SKIP to load ground-truth mels from TSV).",
     )
     parser.add_argument("--amp", action="store_true", help="Inference with AMP")
     parser.add_argument("-bs", "--batch-size", type=int, default=64)
@@ -197,7 +197,7 @@ def load_and_setup_model(
     IMPORTANT FIX:
     - Do NOT parse real sys.argv here. Some embedding apps (GUIs) will import
       this module and call load_and_setup_model, and sys.argv may not include
-      FastPitch CLI flags.
+      QWPitch CLI flags.
     - We parse model args from an empty argv so argparse never aborts.
     """
     if unk_args is None:
@@ -343,8 +343,8 @@ class MeasureTime(list):
 
 
 def main():
-    """Launches FastPitch inference (text -> mel) CLI."""
-    parser = argparse.ArgumentParser(description="PyTorch FastPitch Inference (mel-only)", allow_abbrev=False)
+    """Launches QWPitch inference (text -> mel) CLI."""
+    parser = argparse.ArgumentParser(description="PyTorch QWPitch Inference (mel-only)", allow_abbrev=False)
     parser = parse_args(parser)
     args, unk_args = parser.parse_known_args()
 
@@ -389,7 +389,7 @@ def main():
 
     if args.fastpitch != "SKIP":
         generator = load_and_setup_model(
-            "FastPitch",
+            "QWPitch",
             parser,
             args.fastpitch,
             args.amp,
@@ -482,7 +482,7 @@ def main():
 
                         global_mel_idx += 1
 
-    # Summary stats (FastPitch only)
+    # Summary stats (QWPitch only)
     if generator is not None and len(gen_measures) > 0:
         gm = np.sort(np.asarray(gen_measures))
         log((), {"avg_fastpitch_letters/s": all_letters / gm.sum()})

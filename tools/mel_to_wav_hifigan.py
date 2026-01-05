@@ -37,7 +37,7 @@ def convert_one_mel(gen, h, mel_path: Path, out_path: Path, device: torch.device
             f"{mel_path}: expected shape (T, {h.num_mels}), got {m.shape}"
         )
 
-    # HiFi-GAN expects (B, n_mels, T)
+    # QWGAN expects (B, n_mels, T)
     mel = torch.from_numpy(m.T).unsqueeze(0).to(device).float()
 
     with torch.no_grad():
@@ -59,8 +59,8 @@ def main():
         required=True,
         help="Path to mel .npy OR directory containing *.npy files",
     )
-    ap.add_argument("--hifigan", required=True, help="Path to HiFi-GAN generator .pth")
-    ap.add_argument("--config", required=True, help="Path to HiFi-GAN config.json")
+    ap.add_argument("--hifigan", required=True, help="Path to QWGAN generator .pth")
+    ap.add_argument("--config", required=True, help="Path to QWGAN config.json")
     ap.add_argument(
         "--out",
         required=True,
@@ -81,7 +81,7 @@ def main():
         if out_path.is_dir():
             out_path = out_path / (mel_path.stem + ".wav")
 
-        print(f"[HiFi-GAN] Converting {mel_path.name} → {out_path.name}")
+        print(f"[QWGAN] Converting {mel_path.name} → {out_path.name}")
         convert_one_mel(gen, h, mel_path, out_path, device)
 
     # ---- DIRECTORY OF MELS ----
@@ -92,7 +92,7 @@ def main():
         if not mel_files:
             raise RuntimeError(f"No .npy files found in {mel_path}")
 
-        print(f"[HiFi-GAN] Converting {len(mel_files)} mel files...")
+        print(f"[QWGAN] Converting {len(mel_files)} mel files...")
         for m in mel_files:
             wav_out = out_path / (m.stem + ".wav")
             print(f"  {m.name} → {wav_out.name}")

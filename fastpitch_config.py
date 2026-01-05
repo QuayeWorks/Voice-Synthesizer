@@ -1,4 +1,4 @@
-"""Shared FastPitch tokenizer/training configuration helpers.
+"""Shared QWPitch tokenizer/training configuration helpers.
 
 These helpers keep the GUI, inference CLI, and training entrypoints
 in sync so the tokenizer + style tag inventory cannot silently drift.
@@ -111,12 +111,12 @@ class TrainingConfig:
 
 
 @dataclass
-class FastPitchProjectConfig:
+class QWPitchProjectConfig:
     tokenizer: TokenizerConfig
     training: TrainingConfig
 
     @classmethod
-    def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "FastPitchProjectConfig":
+    def load(cls, path: Path = DEFAULT_CONFIG_PATH) -> "QWPitchProjectConfig":
         payload = json.loads(Path(path).read_text(encoding="utf-8"))
         tokenizer = TokenizerConfig.from_dict(payload["tokenizer"])
         tokenizer.validate()
@@ -124,7 +124,7 @@ class FastPitchProjectConfig:
         return cls(tokenizer=tokenizer, training=training)
 
     def describe(self) -> str:
-        lines: Iterable[str] = ["FastPitch settings:"]
+        lines: Iterable[str] = ["QWPitch settings:"]
         lines = list(lines) + [f"  - {line}" for line in self.tokenizer.summary_lines()]
         lines.append(
             f"  - training: batch_size={self.training.batch_size}, lr={self.training.learning_rate}, "
@@ -137,5 +137,5 @@ class FastPitchProjectConfig:
         return "\n".join(lines)
 
 
-def load_fastpitch_config(path: Path | None = None) -> FastPitchProjectConfig:
-    return FastPitchProjectConfig.load(path or DEFAULT_CONFIG_PATH)
+def load_qwpitch_config(path: Path | None = None) -> QWPitchProjectConfig:
+    return QWPitchProjectConfig.load(path or DEFAULT_CONFIG_PATH)

@@ -9,7 +9,7 @@ LJS_ROOT = ROOT / "datasets" / "LJSpeech-1.1"
 METADATA_PATH = LJS_ROOT / "metadata.csv"
 WAV_DIR = LJS_ROOT / "wavs"
 
-# Where FastPitch expects its filelists
+# Where QWPitch expects its filelists
 FP_FILELIST_DIR = ROOT / "third_party" / "fastpitch" / "filelists"
 FP_FILELIST_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -59,7 +59,7 @@ def main():
                 skipped_missing_wav += 1
                 continue
 
-            # FastPitch wants path *relative to dataset root*
+            # QWPitch wants path *relative to dataset root*
             # (we'll tell it dataset-path=LJS_ROOT)
             wav_rel = f"wavs/{utt_id}.wav"
             entries.append(f"{wav_rel}|{text}")

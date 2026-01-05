@@ -107,7 +107,7 @@ from .common.text.symbols import STYLE_TAGS, get_symbols
 from .common.utils import BenchmarkStats, prepare_tmp
 from .fastpitch.attn_loss_function import AttentionBinarizationLoss
 from .fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
-from .fastpitch.loss_function import FastPitchLoss
+from .fastpitch.loss_function import QWPitchLoss
 
 
 def parse_args(parser):
@@ -278,7 +278,7 @@ def last_checkpoint(output):
             return True
 
     saved = sorted(
-        glob.glob(f'{output}/FastPitch_checkpoint_*.pt'),
+        glob.glob(f'{output}/QWPitch_checkpoint_*.pt'),
         key=lambda f: int(re.search('_(\d+).pt', f).group(1)))
 
     if len(saved) >= 1 and not corrupted(saved[-1]):
@@ -300,7 +300,7 @@ def maybe_save_checkpoint(args, model, ema_model, optimizer, scaler, epoch,
     if not intermediate and epoch < args.epochs:
         return
 
-    fpath = os.path.join(args.output, f"FastPitch_checkpoint_{epoch}.pt")
+    fpath = os.path.join(args.output, f"QWPitch_checkpoint_{epoch}.pt")
     print(f"Saving model and optimizer state at epoch {epoch} to {fpath}")
     ema_dict = None if ema_model is None else ema_model.state_dict()
     checkpoint = {'epoch': epoch,
@@ -454,7 +454,7 @@ def _augment_filelist_for_cache(in_path: str, out_path: str, dataset_root: str,
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='PyTorch FastPitch Training',
+    parser = argparse.ArgumentParser(description='PyTorch QWPitch Training',
                                      allow_abbrev=False)
     parser = parse_args(parser)
     args, _ = parser.parse_known_args(argv)
@@ -480,7 +480,7 @@ def main(argv=None):
                 tb_subsets=tb_subsets)
     logger.parameters(vars(args), tb_subset='train')
 
-    parser = models.parse_model_args('FastPitch', parser)
+    parser = models.parse_model_args('QWPitch', parser)
     args, unk_args = parser.parse_known_args(argv)
     if len(unk_args) > 0:
         raise ValueError(f'Invalid options {unk_args}')
@@ -501,8 +501,8 @@ def main(argv=None):
         init_distributed(args, args.world_size, args.local_rank)
 
     device = torch.device('cuda' if args.cuda else 'cpu')
-    model_config = models.get_model_config('FastPitch', args)
-    model = models.get_model('FastPitch', model_config, device)
+    model_config = models.get_model_config('QWPitch', args)
+    model = models.get_model('QWPitch', model_config, device)
 
     attention_kl_loss = AttentionBinarizationLoss()
 
@@ -555,7 +555,7 @@ def main(argv=None):
     start_epoch = start_epoch[0]
     total_iter = start_iter[0]
 
-    criterion = FastPitchLoss(
+    criterion = QWPitchLoss(
         dur_predictor_loss_scale=args.dur_predictor_loss_scale,
         pitch_predictor_loss_scale=args.pitch_predictor_loss_scale,
         attn_loss_scale=args.attn_loss_scale)
