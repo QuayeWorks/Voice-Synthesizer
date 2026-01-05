@@ -371,6 +371,7 @@ class MainWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("FastPitch + HiFi-GAN GUI")
         self.worker: Optional[SynthWorker] = None
+        self.settings = QtCore.QSettings("VoiceSynthesizer", "FastPitchHiFiGUI")
 
         # Inputs
         self.fastpitch_edit = QtWidgets.QLineEdit()
@@ -445,6 +446,8 @@ class MainWindow(QtWidgets.QWidget):
         layout.addRow("Log", self.log_box)
         self.setLayout(layout)
 
+        self._load_settings()
+
     def _row(self, widget: QtWidgets.QWidget, handler: Callable[[], None]):
         h = QtWidgets.QHBoxLayout()
         h.addWidget(widget)
@@ -467,21 +470,25 @@ class MainWindow(QtWidgets.QWidget):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select FastPitch checkpoint", str(BASE_DIR))
         if path:
             self.fastpitch_edit.setText(path)
+            self._save_settings()
 
     def browse_hifigan(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select HiFi-GAN checkpoint", str(BASE_DIR))
         if path:
             self.hifigan_edit.setText(path)
+            self._save_settings()
 
     def browse_hifigan_cfg(self):
         path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select HiFi-GAN config", str(BASE_DIR))
         if path:
             self.hifigan_cfg_edit.setText(path)
+            self._save_settings()
 
     def browse_output(self):
         path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select output directory", str(BASE_DIR))
         if path:
             self.output_edit.setText(path)
+            self._save_settings()
 
     def log(self, message: str):
         self.log_box.appendPlainText(message)
@@ -505,6 +512,13 @@ class MainWindow(QtWidgets.QWidget):
         if not text.strip():
             self.log("Please enter text to synthesize.")
             return
+
+        self._save_settings()
+        self.log("Using paths:")
+        self.log(f"  FastPitch: {fastpitch}")
+        self.log(f"  HiFi-GAN checkpoint: {hifigan}")
+        self.log(f"  HiFi-GAN config: {hifigan_cfg}")
+        self.log(f"  Output directory: {output_dir}")
 
         pitch = PitchSettings(
             flatten=self.pitch_flat_check.isChecked(),
@@ -532,6 +546,48 @@ class MainWindow(QtWidgets.QWidget):
         self.worker.start()
         self.log("Starting synthesis…")
 
+    def _load_settings(self):
+        self.fastpitch_edit.setText(self.settings.value("fastpitch", ""))
+        self.hifigan_edit.setText(self.settings.value("hifigan", ""))
+        self.hifigan_cfg_edit.setText(self.settings.value("hifigan_cfg", ""))
+        saved_output = self.settings.value("output", "")
+        if saved_output:
+            self.output_edit.setText(saved_output)
+
+        self.cuda_check.setChecked(self.settings.value("cuda", self.cuda_check.isChecked(), type=bool))
+        self.amp_check.setChecked(self.settings.value("amp", self.amp_check.isChecked(), type=bool))
+        self.save_mels_check.setChecked(self.settings.value("save_mels", False, type=bool))
+        self.pitch_flat_check.setChecked(self.settings.value("pitch_flat", False, type=bool))
+        self.pitch_invert_check.setChecked(self.settings.value("pitch_invert", False, type=bool))
+        self.pitch_custom_check.setChecked(self.settings.value("pitch_custom", False, type=bool))
+
+        self.pace_spin.setValue(float(self.settings.value("pace", self.pace_spin.value())))
+        self.batch_spin.setValue(int(self.settings.value("batch", self.batch_spin.value())))
+        self.pitch_amplify_spin.setValue(float(self.settings.value("pitch_amplify", self.pitch_amplify_spin.value())))
+        self.pitch_shift_spin.setValue(float(self.settings.value("pitch_shift", self.pitch_shift_spin.value())))
+
+    def _save_settings(self):
+        self.settings.setValue("fastpitch", self.fastpitch_edit.text())
+        self.settings.setValue("hifigan", self.hifigan_edit.text())
+        self.settings.setValue("hifigan_cfg", self.hifigan_cfg_edit.text())
+        self.settings.setValue("output", self.output_edit.text())
+        self.settings.setValue("cuda", self.cuda_check.isChecked())
+        self.settings.setValue("amp", self.amp_check.isChecked())
+        self.settings.setValue("save_mels", self.save_mels_check.isChecked())
+        self.settings.setValue("pitch_flat", self.pitch_flat_check.isChecked())
+        self.settings.setValue("pitch_invert", self.pitch_invert_check.isChecked())
+        self.settings.setValue("pitch_custom", self.pitch_custom_check.isChecked())
+        self.settings.setValue("pace", self.pace_spin.value())
+        self.settings.setValue("batch", self.batch_spin.value())
+        self.settings.setValue("pitch_amplify", self.pitch_amplify_spin.value())
+        self.settings.setValue("pitch_shift", self.pitch_shift_spin.value())
+
+    def closeEvent(self, event):  # noqa: N802,D401
+        """Persist settings when the window is closed."""
+
+        self._save_settings()
+        super().closeEvent(event)
+
     def on_finished(self, success: bool, message: str):
         self.log(message)
         if success:
@@ -546,11 +602,13 @@ def _run_cli(argv: Sequence[str]) -> bool:
     Returns True if CLI mode handled execution, False otherwise.
     """
 
-    if "--cli" not in argv:
+    cli_triggers = {"--cli", "-i", "--input", "--fastpitch", "--hifigan", "--hifigan-config"}
+    if not any(flag in argv for flag in cli_triggers):
         return False
 
     parser = argparse.ArgumentParser(
-        description="FastPitch + HiFi-GAN CLI (pass --cli to enable)", allow_abbrev=False
+        description="FastPitch + HiFi-GAN CLI (GUI is the default; pass CLI args to use this mode)",
+        allow_abbrev=False,
     )
     parser.add_argument("--cli", action="store_true", help="Run without the GUI")
     parser.add_argument("-i", "--input", required=True, help="Text file with one line per utterance")
