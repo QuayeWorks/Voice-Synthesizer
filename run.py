@@ -21,6 +21,7 @@ import argparse
 import datetime as dt
 from dataclasses import dataclass
 from contextlib import nullcontext
+import os
 import sys
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
@@ -28,6 +29,12 @@ from typing import Callable, Iterable, List, Optional, Sequence
 import numpy as np
 import torch
 from scipy.io.wavfile import write
+
+# Allow headless environments to use the offscreen Qt platform plugin when no
+# display is available. This must run before importing PyQt5.
+if not os.getenv("QT_QPA_PLATFORM") and not os.getenv("DISPLAY"):
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
 from PyQt5 import QtCore, QtWidgets
 
 # FastPitch + HiFi-GAN imports
