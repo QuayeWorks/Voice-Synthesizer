@@ -1,1 +1,1 @@
-# Common utilities package marker for FastPitch.
+# Common utilities package marker for QWPitch.

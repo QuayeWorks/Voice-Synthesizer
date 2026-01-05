@@ -28,25 +28,25 @@
 import torch
 
 from third_party.fastpitch.common.text.symbols import get_pad_idx, get_symbols
-from third_party.fastpitch.fastpitch.model import FastPitch
-from third_party.fastpitch.fastpitch.model_jit import FastPitchJIT
+from third_party.fastpitch.fastpitch.model import QWPitch
+from third_party.fastpitch.fastpitch.model_jit import QWPitchJIT
 
 # NOTE:
 # WaveGlow support has been intentionally removed from this project.
-# Keeping these stubs prevents accidental imports from breaking FastPitch workflows.
+# Keeping these stubs prevents accidental imports from breaking QWPitch workflows.
 WaveGlow = None
 
 
 def _waveglow_removed_error():
     raise RuntimeError(
         "WaveGlow support was removed from this repo. "
-        "Use HiFi-GAN for mel->wav, and FastPitch for text->mel."
+        "Use QWGAN for mel->wav, and QWPitch for text->mel."
     )
 
 
 def parse_model_args(model_name, parser, add_help=False):
-    # Keep FastPitch only
-    if model_name == "FastPitch":
+    # Keep QWPitch only
+    if model_name == "QWPitch":
         from .fastpitch.arg_parser import parse_fastpitch_args
         return parse_fastpitch_args(parser, add_help)
 
@@ -73,12 +73,12 @@ def get_model(
     forward_is_infer=False,
     jitable=False,
 ):
-    # Keep FastPitch only
-    if model_name == "FastPitch":
+    # Keep QWPitch only
+    if model_name == "QWPitch":
         if jitable:
-            model = FastPitchJIT(**model_config)
+            model = QWPitchJIT(**model_config)
         else:
-            model = FastPitch(**model_config)
+            model = QWPitch(**model_config)
     elif model_name == "WaveGlow":
         _waveglow_removed_error()
     else:
@@ -95,8 +95,8 @@ def get_model(
 
 def get_model_config(model_name, args):
     """Choose a model config based on name."""
-    # Keep FastPitch only
-    if model_name == "FastPitch":
+    # Keep QWPitch only
+    if model_name == "QWPitch":
         model_config = dict(
             # io
             n_mel_channels=args.n_mel_channels,

@@ -58,7 +58,7 @@ def regulate_len(durations, enc_out, pace: float = 1.0,
     return enc_rep, dec_lens
 
 
-class FastPitchJIT(nn.Module):
+class QWPitchJIT(nn.Module):
     def __init__(self, n_mel_channels, n_symbols, padding_idx,
                  symbols_embedding_dim, in_fft_n_layers, in_fft_n_heads,
                  in_fft_d_head,
@@ -79,7 +79,7 @@ class FastPitchJIT(nn.Module):
                  p_energy_predictor_dropout, energy_predictor_n_layers,
                  energy_embedding_kernel_size,
                  n_speakers, speaker_emb_weight, pitch_conditioning_formants=1):
-        super(FastPitchJIT, self).__init__()
+        super(QWPitchJIT, self).__init__()
 
         self.encoder = FFTransformer(
             n_layer=in_fft_n_layers, n_head=in_fft_n_heads,

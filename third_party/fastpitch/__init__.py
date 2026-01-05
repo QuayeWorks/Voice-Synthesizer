@@ -1,1 +1,1 @@
-# FastPitch package marker.
+# QWPitch package marker.

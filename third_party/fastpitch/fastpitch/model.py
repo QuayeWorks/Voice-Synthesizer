@@ -106,7 +106,7 @@ class TemporalPredictor(nn.Module):
         return out
 
 
-class FastPitch(nn.Module):
+class QWPitch(nn.Module):
     def __init__(self, n_mel_channels, n_symbols, padding_idx,
                  symbols_embedding_dim, in_fft_n_layers, in_fft_n_heads,
                  in_fft_d_head,
@@ -127,7 +127,7 @@ class FastPitch(nn.Module):
                  p_energy_predictor_dropout, energy_predictor_n_layers,
                  energy_embedding_kernel_size,
                  n_speakers, speaker_emb_weight, pitch_conditioning_formants=1):
-        super(FastPitch, self).__init__()
+        super(QWPitch, self).__init__()
 
         self.encoder = FFTransformer(
             n_layer=in_fft_n_layers, n_head=in_fft_n_heads,
@@ -309,7 +309,7 @@ class FastPitch(nn.Module):
                     ap = None
                 if ap is not None:
                     # Keep it short; DDP will print from both ranks
-                    print(f"[FastPitch] dur/mel mismatch fixed: {ap} (diff={d})")
+                    print(f"[QWPitch] dur/mel mismatch fixed: {ap} (diff={d})")
 
         # Safety check (keep this assert; it should now always pass)
         # ---- FIX: tolerate rare off-by-1/-2 duration<->mel length mismatches ----
@@ -332,14 +332,14 @@ class FastPitch(nn.Module):
                     j = int(nz[-1].item())
                     dur_tgt[b, j] = torch.clamp(dur_tgt[b, j] + d, min=0)
                     if audiopaths is not None:
-                        print(f"[FastPitch] dur/mel mismatch fixed: {audiopaths[b]} (diff={-d})")
+                        print(f"[QWPitch] dur/mel mismatch fixed: {audiopaths[b]} (diff={-d})")
                 # Recompute and sanity check
                 dur_sum = dur_tgt.sum(dim=1).long()
             else:
                 if audiopaths is not None:
                     bad = (diff != 0).nonzero(as_tuple=False).squeeze(-1).tolist()
                     for b in bad[:10]:
-                        print(f"[FastPitch] dur/mel mismatch TOO LARGE: {audiopaths[b]} (diff={int(diff[b])})")
+                        print(f"[QWPitch] dur/mel mismatch TOO LARGE: {audiopaths[b]} (diff={int(diff[b])})")
                 raise RuntimeError(f"dur/mel mismatch too large (max_abs={max_abs}). Rebuild cached mels/pitch.")
         # ------------------------------------------------------------------------
 

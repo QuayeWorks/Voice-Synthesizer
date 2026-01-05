@@ -1,4 +1,4 @@
-"""Utility helpers for HiFi-GAN components."""
+"""Utility helpers for QWGAN components."""
 from __future__ import annotations
 
 import torch
@@ -8,7 +8,7 @@ def init_weights(m: torch.nn.Module, mean: float = 0.0, std: float = 0.01) -> No
     """Initialize convolutional weights with a normal distribution.
 
     Mirrors the lightweight initialization used in the reference
-    HiFi-GAN implementation and keeps other module types untouched.
+    QWGAN implementation and keeps other module types untouched.
     """
     classname = m.__class__.__name__
     if "Conv" in classname:

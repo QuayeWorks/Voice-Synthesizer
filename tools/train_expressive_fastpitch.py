@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 from typing import List, Sequence, Tuple
 
-from fastpitch_config import DEFAULT_CONFIG_PATH, FastPitchProjectConfig, load_fastpitch_config
+from fastpitch_config import DEFAULT_CONFIG_PATH, QWPitchProjectConfig, load_qwpitch_config
 from third_party.fastpitch import train as fastpitch_train
 
 
@@ -40,7 +40,7 @@ def _resolve_filelists(files: Sequence[str]) -> List[Path]:
 
 
 def _build_training_cli(
-    config: FastPitchProjectConfig,
+    config: QWPitchProjectConfig,
     output_dir: Path,
     train_files: List[Path],
     val_files: List[Path],
@@ -108,10 +108,10 @@ def _build_training_cli(
 
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
-        description="Train FastPitch with locked style-tag tokenizer settings",
+        description="Train QWPitch with locked style-tag tokenizer settings",
         allow_abbrev=False,
     )
-    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="Path to FastPitch config JSON")
+    parser.add_argument("--config", default=DEFAULT_CONFIG_PATH, help="Path to QWPitch config JSON")
     parser.add_argument("--metadata", help="metadata.csv or filelist to split into train/val")
     parser.add_argument("--train-filelist", nargs="*", help="Existing training filelists (skip --metadata)")
     parser.add_argument("--val-filelist", nargs="*", help="Existing validation filelists")
@@ -122,7 +122,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--batch-size", type=int, help="Override batch size from config")
 
     args = parser.parse_args(argv)
-    project_config = load_fastpitch_config(Path(args.config))
+    project_config = load_qwpitch_config(Path(args.config))
 
     if args.metadata:
         train_files, val_files = _split_metadata(
@@ -147,7 +147,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     print(project_config.describe())
     print(f"Using training files: {train_files}")
     print(f"Using validation files: {val_files}")
-    print(f"Launching FastPitch training with args: {' '.join(cli_args)}")
+    print(f"Launching QWPitch training with args: {' '.join(cli_args)}")
 
     fastpitch_train.main(cli_args)
 

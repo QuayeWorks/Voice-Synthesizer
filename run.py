@@ -1,14 +1,14 @@
-"""PyQt5 GUI for FastPitch (text->mel) + HiFi-GAN (mel->wav).
+"""PyQt5 GUI for QWPitch (text->mel) + QWGAN (mel->wav).
 
 This GUI keeps the modern pipeline only (no Tacotron2/WaveGlow).
-- FastPitch produces mels directly from text.
-- HiFi-GAN vocodes those mels into WAV files.
+- QWPitch produces mels directly from text.
+- QWGAN vocodes those mels into WAV files.
 
 Features
 --------
-- Model selection for FastPitch checkpoint, HiFi-GAN generator + config.
-- CUDA + AMP toggles (AMP only affects FastPitch when CUDA is on).
-- Pace + pitch transform controls for FastPitch.
+- Model selection for QWPitch checkpoint, QWGAN generator + config.
+- CUDA + AMP toggles (AMP only affects QWPitch when CUDA is on).
+- Pace + pitch transform controls for QWPitch.
 - Multi-line text input (one line = one output wav) with batch processing.
 - Optional mel saving alongside WAVs.
 - Output directory picker with /mels + /wavs subfolders.
@@ -22,8 +22,8 @@ import os
 
 # ------------------------------------------------------------------
 # CRITICAL FIX:
-# FastPitch parses CLI args at *import time*.
-# When running a GUI, we must strip argv BEFORE importing FastPitch.
+# QWPitch parses CLI args at *import time*.
+# When running a GUI, we must strip argv BEFORE importing QWPitch.
 # ------------------------------------------------------------------
 sys.argv = [sys.argv[0]]
 
@@ -36,7 +36,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
 
-from fastpitch_config import FastPitchProjectConfig, TokenizerConfig, load_fastpitch_config
+from fastpitch_config import QWPitchProjectConfig, TokenizerConfig, load_qwpitch_config
 
 import numpy as np
 import torch
@@ -73,14 +73,14 @@ _configure_qt_platform()
 
 from PyQt5 import QtCore, QtWidgets  # noqa: E402
 
-# FastPitch + HiFi-GAN imports
+# QWPitch + QWGAN imports
 from third_party.fastpitch import inference as fp_infer  # noqa: E402
 from third_party.fastpitch.common.text import cmudict  # noqa: E402
 from third_party.hifigan.env import AttrDict  # noqa: E402
 from third_party.hifigan.models import Generator  # noqa: E402
 
 BASE_DIR = Path(__file__).parent.resolve()
-PROJECT_CONFIG: FastPitchProjectConfig = load_fastpitch_config()
+PROJECT_CONFIG: QWPitchProjectConfig = load_qwpitch_config()
 
 
 def summarize_tokenizer(separator: str = " | ") -> str:
@@ -97,7 +97,7 @@ class PitchSettings:
 
 
 @dataclass
-class FastPitchOutput:
+class QWPitchOutput:
     stem: str
     mel: np.ndarray  # (T, n_mels)
     mel_path: Optional[Path]
@@ -118,13 +118,13 @@ def _build_pitch_transform(settings: PitchSettings):
 
 
 def _prepare_fastpitch_model(ckpt: Path, device: torch.device, use_amp: bool):
-    """Load FastPitch without requiring CLI args.
+    """Load QWPitch without requiring CLI args.
 
     NOTE: third_party.fastpitch.inference.parse_args() defines required CLI flags
     (e.g., -i/--input and --fastpitch). When we call argparse with an empty argv
     inside the GUI, argparse exits with a usage error.
 
-    To keep using FastPitch's helper utilities (EMA/torchscript flags, etc.)
+    To keep using QWPitch's helper utilities (EMA/torchscript flags, etc.)
     while running from the GUI, we pass a minimal dummy argv that satisfies
     those required arguments. The GUI still controls the actual checkpoint
     path via the `ckpt` parameter passed into load_and_setup_model().
@@ -139,7 +139,7 @@ def _prepare_fastpitch_model(ckpt: Path, device: torch.device, use_amp: bool):
 
     args.amp = use_amp
     model = fp_infer.load_and_setup_model(
-        "FastPitch",
+        "QWPitch",
         parser,
         str(ckpt),
         use_amp,
@@ -165,14 +165,14 @@ def fastpitch_infer(
     use_amp: bool = False,
     progress: Optional[Callable[[str], None]] = None,
     tokenizer_cfg: TokenizerConfig | None = None,
-) -> List[FastPitchOutput]:
-    """Run FastPitch on provided text lines and return mel outputs."""
+) -> List[QWPitchOutput]:
+    """Run QWPitch on provided text lines and return mel outputs."""
 
     if len(texts) != len(stems):
         raise ValueError("texts and stems must have the same length")
 
     if progress:
-        progress("Loading FastPitch…")
+        progress("Loading QWPitch…")
 
     if any(len(t.strip()) == 0 for t in texts):
         raise ValueError("Blank lines are not allowed in the input text")
@@ -208,7 +208,7 @@ def fastpitch_infer(
         "pitch_transform": pitch_transform,
     }
 
-    outputs: List[FastPitchOutput] = []
+    outputs: List[QWPitchOutput] = []
     autocast = torch.cuda.amp.autocast if device.type == "cuda" else nullcontext
 
     for batch in batches:
@@ -224,7 +224,7 @@ def fastpitch_infer(
                 mel_dir.mkdir(parents=True, exist_ok=True)
                 mel_path = mel_dir / f"{stem}.npy"
                 np.save(mel_path, mel_trimmed)
-            outputs.append(FastPitchOutput(stem=stem, mel=mel_trimmed, mel_path=mel_path))
+            outputs.append(QWPitchOutput(stem=stem, mel=mel_trimmed, mel_path=mel_path))
 
         if progress:
             progress(f"Processed batch with {len(batch['text'])} line(s)")
@@ -253,18 +253,18 @@ def _load_hifigan(generator_path: Path, config_path: Path, device: torch.device)
 
 
 def hifigan_vocode(
-    mels: Iterable[FastPitchOutput],
+    mels: Iterable[QWPitchOutput],
     generator_path: Path,
     config_path: Path,
     out_dir: Path,
     device: torch.device,
     progress: Optional[Callable[[str], None]] = None,
 ) -> List[Path]:
-    """Convert mels to wavs using HiFi-GAN."""
+    """Convert mels to wavs using QWGAN."""
 
     out_dir.mkdir(parents=True, exist_ok=True)
     if progress:
-        progress("Loading HiFi-GAN…")
+        progress("Loading QWGAN…")
 
     generator, hparams = _load_hifigan(generator_path, config_path, device)
     wav_paths: List[Path] = []
@@ -333,7 +333,7 @@ def run_pipeline(
     )
 
     if progress:
-        progress(f"FastPitch finished. Vocoding {len(fp_outputs)} mel(s)…")
+        progress(f"QWPitch finished. Vocoding {len(fp_outputs)} mel(s)…")
 
     wav_paths = hifigan_vocode(
         fp_outputs,
@@ -413,9 +413,9 @@ class SynthWorker(QtCore.QThread):
 class MainWindow(QtWidgets.QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("FastPitch + HiFi-GAN GUI")
+        self.setWindowTitle("QWPitch + QWGAN GUI")
         self.worker: Optional[SynthWorker] = None
-        self.settings = QtCore.QSettings("VoiceSynthesizer", "FastPitchHiFiGUI")
+        self.settings = QtCore.QSettings("VoiceSynthesizer", "QWPitchHiFiGUI")
 
         # Inputs
         self.fastpitch_edit = QtWidgets.QLineEdit()
@@ -438,7 +438,7 @@ class MainWindow(QtWidgets.QWidget):
 
         self.cuda_check = QtWidgets.QCheckBox("Use CUDA if available")
         self.cuda_check.setChecked(torch.cuda.is_available())
-        self.amp_check = QtWidgets.QCheckBox("Use AMP (FastPitch)")
+        self.amp_check = QtWidgets.QCheckBox("Use AMP (QWPitch)")
         self.amp_check.setToolTip("Enabled only when CUDA is available")
 
         self.pace_spin = QtWidgets.QDoubleSpinBox()
@@ -472,9 +472,9 @@ class MainWindow(QtWidgets.QWidget):
 
         layout = QtWidgets.QFormLayout()
         for label, widget, handler in (
-            ("FastPitch checkpoint", self.fastpitch_edit, self.browse_model),
-            ("HiFi-GAN checkpoint", self.hifigan_edit, self.browse_hifigan),
-            ("HiFi-GAN config", self.hifigan_cfg_edit, self.browse_hifigan_cfg),
+            ("QWPitch checkpoint", self.fastpitch_edit, self.browse_model),
+            ("QWGAN checkpoint", self.hifigan_edit, self.browse_hifigan),
+            ("QWGAN config", self.hifigan_cfg_edit, self.browse_hifigan_cfg),
             ("Phrases file (-i)", self.input_file_edit, self.browse_input_file),
             ("Output directory", self.output_edit, self.browse_output),
         ):
@@ -533,19 +533,19 @@ class MainWindow(QtWidgets.QWidget):
             self._save_settings()
 
     def browse_model(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select FastPitch checkpoint", str(BASE_DIR))
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select QWPitch checkpoint", str(BASE_DIR))
         if path:
             self.fastpitch_edit.setText(path)
             self._save_settings()
 
     def browse_hifigan(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select HiFi-GAN checkpoint", str(BASE_DIR))
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select QWGAN checkpoint", str(BASE_DIR))
         if path:
             self.hifigan_edit.setText(path)
             self._save_settings()
 
     def browse_hifigan_cfg(self):
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select HiFi-GAN config", str(BASE_DIR))
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select QWGAN config", str(BASE_DIR))
         if path:
             self.hifigan_cfg_edit.setText(path)
             self._save_settings()
@@ -612,9 +612,9 @@ class MainWindow(QtWidgets.QWidget):
 
         self._save_settings()
         self.log("Using paths:")
-        self.log(f"  FastPitch: {fastpitch}")
-        self.log(f"  HiFi-GAN checkpoint: {hifigan}")
-        self.log(f"  HiFi-GAN config: {hifigan_cfg}")
+        self.log(f"  QWPitch: {fastpitch}")
+        self.log(f"  QWGAN checkpoint: {hifigan}")
+        self.log(f"  QWGAN config: {hifigan_cfg}")
         self.log(f"  Phrases file (-i): {input_file if input_file else '(text box)'}")
         self.log(f"  Output directory: {output_dir}")
         self.log(f"  Tokenizer: {summarize_tokenizer()}")
@@ -716,19 +716,19 @@ def _run_cli(argv: Sequence[str]) -> bool:
         return False
 
     parser = argparse.ArgumentParser(
-        description="FastPitch + HiFi-GAN CLI (GUI is the default; pass --cli to use this mode)",
+        description="QWPitch + QWGAN CLI (GUI is the default; pass --cli to use this mode)",
         allow_abbrev=False,
     )
     parser.add_argument("--cli", action="store_true", help="Run without the GUI")
     parser.add_argument("-i", "--input", required=True, help="Text file with one line per utterance")
-    parser.add_argument("--fastpitch", required=True, help="Path to FastPitch checkpoint")
-    parser.add_argument("--hifigan", required=True, help="Path to HiFi-GAN checkpoint")
-    parser.add_argument("--hifigan-config", required=True, help="Path to HiFi-GAN config JSON")
+    parser.add_argument("--fastpitch", required=True, help="Path to QWPitch checkpoint")
+    parser.add_argument("--hifigan", required=True, help="Path to QWGAN checkpoint")
+    parser.add_argument("--hifigan-config", required=True, help="Path to QWGAN config JSON")
     parser.add_argument("-o", "--output", default=str(BASE_DIR / "inference"), help="Output folder root")
     parser.add_argument("--cuda", action="store_true", help="Use CUDA if available")
-    parser.add_argument("--amp", action="store_true", help="Use AMP for FastPitch")
+    parser.add_argument("--amp", action="store_true", help="Use AMP for QWPitch")
     parser.add_argument("--pace", type=float, default=1.0, help="Speaking pace multiplier")
-    parser.add_argument("--batch-size", type=int, default=4, help="Batch size for FastPitch")
+    parser.add_argument("--batch-size", type=int, default=4, help="Batch size for QWPitch")
     parser.add_argument("--save-mels", action="store_true", help="Save intermediate mel .npy files")
     parser.add_argument("--pitch-flatten", action="store_true", help="Flatten pitch contours")
     parser.add_argument("--pitch-invert", action="store_true", help="Invert pitch contours")

@@ -18,7 +18,7 @@ HIFIGAN_DIR = os.path.join(ROOT, "third_party", "hifigan")
 if os.path.isdir(WG_DIR) and WG_DIR not in sys.path:
     sys.path.insert(0, WG_DIR)
 
-# HiFi-GAN directory (so its 'env.py' and 'models.py' can be imported as top-level)
+# QWGAN directory (so its 'env.py' and 'models.py' can be imported as top-level)
 if os.path.isdir(HIFIGAN_DIR) and HIFIGAN_DIR not in sys.path:
     sys.path.insert(0, HIFIGAN_DIR)
 
@@ -31,7 +31,7 @@ from third_party.tacotron2.text import text_to_sequence
 from glow import WaveGlow
 from denoiser import Denoiser
 
-# ----- optional HiFi-GAN imports -----
+# ----- optional QWGAN imports -----
 # Expecting:
 # third_party/hifigan/
 #   |-- models.py   (defines Generator)
@@ -41,7 +41,7 @@ try:
     from third_party.hifigan.env import AttrDict as HifiAttrDict
     _HAS_HIFIGAN = True
 except ImportError as e:
-    print("[synth] HiFi-GAN import error:", repr(e))
+    print("[synth] QWGAN import error:", repr(e))
     _HAS_HIFIGAN = False
 
 
@@ -133,7 +133,7 @@ def load_waveglow(path: str, device: str):
 
 def load_hifigan(generator_path: str, config_path: str, device: str):
     """
-    Load a HiFi-GAN generator from a local checkpoint + JSON config.
+    Load a QWGAN generator from a local checkpoint + JSON config.
 
     Expected:
       - third_party/hifigan/models.py  defines Generator
@@ -141,11 +141,11 @@ def load_hifigan(generator_path: str, config_path: str, device: str):
     """
     if not _HAS_HIFIGAN:
         raise RuntimeError(
-            "HiFi-GAN not available: models/env not importable. "
-            "Make sure you cloned HiFi-GAN into third_party/hifigan."
+            "QWGAN not available: models/env not importable. "
+            "Make sure you cloned QWGAN into third_party/hifigan."
         )
     if config_path is None:
-        raise ValueError("HiFi-GAN requires --hifigan_config pointing to a JSON config.")
+        raise ValueError("QWGAN requires --hifigan_config pointing to a JSON config.")
 
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
@@ -188,9 +188,9 @@ def main():
     p.add_argument("--denoise", type=float, default=0.0, help="waveglow denoiser strength")
     p.add_argument("--sigma", type=float, default=0.8, help="waveglow noise scale")
 
-    # HiFi-GAN-specific
-    p.add_argument("--hifigan", help="path to HiFi-GAN generator checkpoint (when using --vocoder hifigan)")
-    p.add_argument("--hifigan_config", help="path to HiFi-GAN JSON config (when using --vocoder hifigan)")
+    # QWGAN-specific
+    p.add_argument("--hifigan", help="path to QWGAN generator checkpoint (when using --vocoder hifigan)")
+    p.add_argument("--hifigan_config", help="path to QWGAN JSON config (when using --vocoder hifigan)")
 
     # Common
     p.add_argument("--text", required=True)
@@ -252,8 +252,8 @@ def main():
             audio = waveglow.infer(mel, sigma=args.sigma).squeeze(0)  # [T]
             if args.denoise > 0.0:
                 audio = denoiser(audio.unsqueeze(0), args.denoise).squeeze(0)
-        else:  # HiFi-GAN
-            # HiFi-GAN returns [B, 1, T]; squeeze to [T]
+        else:  # QWGAN
+            # QWGAN returns [B, 1, T]; squeeze to [T]
             audio = hifigan(mel)
             # make sure it's 1D: [T]
             audio = audio.squeeze()  
