@@ -477,6 +477,9 @@ class MainWindow(QtWidgets.QWidget):
 
     def _build_synthesis_tab(self) -> QtWidgets.QWidget:
         tab = QtWidgets.QWidget()
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QtWidgets.QWidget()
 
         # Inputs
         self.fastpitch_edit = QtWidgets.QLineEdit()
@@ -561,11 +564,19 @@ class MainWindow(QtWidgets.QWidget):
         layout.addRow(synth_btn)
         layout.addRow("Log", self.log_box)
 
-        tab.setLayout(layout)
+        content.setLayout(layout)
+        scroll.setWidget(content)
+
+        outer = QtWidgets.QVBoxLayout()
+        outer.addWidget(scroll)
+        tab.setLayout(outer)
         return tab
 
     def _build_training_tab(self) -> QtWidgets.QWidget:
         tab = QtWidgets.QWidget()
+        scroll = QtWidgets.QScrollArea()
+        scroll.setWidgetResizable(True)
+        content = QtWidgets.QWidget()
         vbox = QtWidgets.QVBoxLayout()
 
         warning = QtWidgets.QLabel(
@@ -737,7 +748,12 @@ class MainWindow(QtWidgets.QWidget):
         vbox.addWidget(log_label)
         vbox.addWidget(self.train_log)
 
-        tab.setLayout(vbox)
+        content.setLayout(vbox)
+        scroll.setWidget(content)
+
+        outer = QtWidgets.QVBoxLayout()
+        outer.addWidget(scroll)
+        tab.setLayout(outer)
         return tab
 
     def _row(self, widget: QtWidgets.QWidget, handler: Callable[[], None]):
