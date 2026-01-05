@@ -31,6 +31,9 @@ import argparse
 import datetime as dt
 from dataclasses import dataclass
 from contextlib import nullcontext
+import shlex
+import signal
+import subprocess
 import os
 import sys
 from pathlib import Path
@@ -71,7 +74,7 @@ def _configure_qt_platform():
 
 _configure_qt_platform()
 
-from PyQt5 import QtCore, QtWidgets  # noqa: E402
+from PyQt5 import QtCore, QtWidgets, QtGui  # noqa: E402
 
 # QWPitch + QWGAN imports
 from third_party.fastpitch import inference as fp_infer  # noqa: E402
@@ -350,6 +353,50 @@ def run_pipeline(
 # ------------------------------- GUI -------------------------------- #
 
 
+class ProcessWorker(QtCore.QThread):
+    log_line = QtCore.pyqtSignal(str)
+    finished = QtCore.pyqtSignal(int)
+
+    def __init__(self, cmd: list[str]):
+        super().__init__()
+        self.cmd = cmd
+        self._proc: Optional[subprocess.Popen[str]] = None
+
+    def stop(self):
+        if self._proc and self._proc.poll() is None:
+            try:
+                os.killpg(os.getpgid(self._proc.pid), signal.SIGTERM)
+            except Exception:  # noqa: BLE001
+                try:
+                    self._proc.terminate()
+                except Exception:  # noqa: BLE001
+                    pass
+
+    def run(self):  # noqa: D401
+        """Spawn the subprocess and stream its output."""
+
+        try:
+            self._proc = subprocess.Popen(
+                self.cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                preexec_fn=os.setsid,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.log_line.emit(f"Failed to start process: {exc}")
+            self.finished.emit(1)
+            return
+
+        assert self._proc.stdout is not None
+        for line in self._proc.stdout:
+            self.log_line.emit(line.rstrip("\n"))
+
+        self._proc.wait()
+        self.finished.emit(self._proc.returncode or 0)
+
+
 class SynthWorker(QtCore.QThread):
     progress = QtCore.pyqtSignal(str)
     finished = QtCore.pyqtSignal(bool, str)
@@ -415,7 +462,21 @@ class MainWindow(QtWidgets.QWidget):
         super().__init__()
         self.setWindowTitle("QWPitch + QWGAN GUI")
         self.worker: Optional[SynthWorker] = None
+        self.process_worker: Optional[ProcessWorker] = None
         self.settings = QtCore.QSettings("VoiceSynthesizer", "QWPitchHiFiGUI")
+
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(self._build_synthesis_tab(), "Synthesis")
+        self.tabs.addTab(self._build_training_tab(), "Training")
+
+        outer = QtWidgets.QVBoxLayout()
+        outer.addWidget(self.tabs)
+        self.setLayout(outer)
+
+        self._load_settings()
+
+    def _build_synthesis_tab(self) -> QtWidgets.QWidget:
+        tab = QtWidgets.QWidget()
 
         # Inputs
         self.fastpitch_edit = QtWidgets.QLineEdit()
@@ -499,9 +560,185 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addRow(synth_btn)
         layout.addRow("Log", self.log_box)
-        self.setLayout(layout)
 
-        self._load_settings()
+        tab.setLayout(layout)
+        return tab
+
+    def _build_training_tab(self) -> QtWidgets.QWidget:
+        tab = QtWidgets.QWidget()
+        vbox = QtWidgets.QVBoxLayout()
+
+        warning = QtWidgets.QLabel(
+            "If resuming from a checkpoint, ensure n_symbols matches your current tokenizer (158).\n"
+            "If vocab differs, retrain from scratch or provide compatible symbols."
+        )
+        warning.setWordWrap(True)
+        warning.setStyleSheet("color: #b58900; font-weight: bold;")
+        vbox.addWidget(warning)
+
+        # Paths & files
+        paths_group = QtWidgets.QGroupBox("Paths & files")
+        paths_form = QtWidgets.QFormLayout()
+        self.dataset_root_edit = QtWidgets.QLineEdit(str(BASE_DIR / "datasets/LJSpeech-1.1"))
+        self.train_filelist_edit = QtWidgets.QLineEdit(str(BASE_DIR / "filelists/ljs_train_clean.txt"))
+        self.val_filelist_edit = QtWidgets.QLineEdit(str(BASE_DIR / "filelists/ljs_val_clean.txt"))
+        self.ckpt_dir_edit = QtWidgets.QLineEdit(str(BASE_DIR / "checkpoints/fastpitch_ddp_test"))
+        self.fastpitch_folder_edit = QtWidgets.QLineEdit(str(BASE_DIR / "third_party/fastpitch"))
+        self.python_exec_edit = QtWidgets.QLineEdit(sys.executable)
+        self.use_venv_python_check = QtWidgets.QCheckBox("Use current venv python")
+        self.use_venv_python_check.setChecked(True)
+        self.torchrun_exec_edit = QtWidgets.QLineEdit("torchrun")
+
+        def add_path_row(label: str, widget: QtWidgets.QLineEdit, directory: bool = True):
+            btn = QtWidgets.QPushButton("Browse")
+            if directory:
+                btn.clicked.connect(lambda _, w=widget: self._pick_dir(w))
+            else:
+                btn.clicked.connect(lambda _, w=widget: self._pick_file(w))
+            row = QtWidgets.QHBoxLayout()
+            row.addWidget(widget)
+            row.addWidget(btn)
+            container = QtWidgets.QWidget()
+            container.setLayout(row)
+            paths_form.addRow(label, container)
+
+        add_path_row("Dataset root (-d)", self.dataset_root_edit)
+        add_path_row("Train filelist", self.train_filelist_edit, directory=False)
+        add_path_row("Val filelist", self.val_filelist_edit, directory=False)
+        add_path_row("Output checkpoints", self.ckpt_dir_edit)
+        add_path_row("FastPitch folder", self.fastpitch_folder_edit)
+        paths_form.addRow("Python executable", self.python_exec_edit)
+        paths_form.addRow(self.use_venv_python_check)
+        paths_form.addRow("Torchrun executable", self.torchrun_exec_edit)
+        paths_group.setLayout(paths_form)
+        vbox.addWidget(paths_group)
+
+        # Precompile settings
+        prep_group = QtWidgets.QGroupBox("Precompile settings")
+        prep_form = QtWidgets.QFormLayout()
+        self.extract_mels_check = QtWidgets.QCheckBox("Extract mels")
+        self.extract_mels_check.setChecked(True)
+        self.extract_pitch_check = QtWidgets.QCheckBox("Extract pitch")
+        self.extract_pitch_check.setChecked(True)
+        self.prep_batch_spin = QtWidgets.QSpinBox()
+        self.prep_batch_spin.setRange(1, 256)
+        self.prep_batch_spin.setValue(8)
+        self.prep_workers_spin = QtWidgets.QSpinBox()
+        self.prep_workers_spin.setRange(1, 128)
+        self.prep_workers_spin.setValue(16)
+        prep_btn = QtWidgets.QPushButton("Run Precompile")
+        prep_btn.clicked.connect(self.start_precompile)
+        prep_form.addRow(self.extract_mels_check, self.extract_pitch_check)
+        prep_form.addRow("Batch size (-b)", self.prep_batch_spin)
+        prep_form.addRow("Workers (--n-workers)", self.prep_workers_spin)
+        prep_form.addRow(prep_btn)
+        prep_group.setLayout(prep_form)
+        vbox.addWidget(prep_group)
+
+        # Training settings
+        train_group = QtWidgets.QGroupBox("Training settings")
+        train_form = QtWidgets.QFormLayout()
+        self.nproc_spin = QtWidgets.QSpinBox()
+        self.nproc_spin.setRange(1, 64)
+        self.nproc_spin.setValue(2)
+        self.master_port_spin = QtWidgets.QSpinBox()
+        self.master_port_spin.setRange(1024, 65535)
+        self.master_port_spin.setValue(29501)
+        self.epochs_spin = QtWidgets.QSpinBox()
+        self.epochs_spin.setRange(1, 5000)
+        self.epochs_spin.setValue(900)
+        self.epc_spin = QtWidgets.QSpinBox()
+        self.epc_spin.setRange(1, 1000)
+        self.epc_spin.setValue(25)
+        self.train_batch_spin = QtWidgets.QSpinBox()
+        self.train_batch_spin.setRange(1, 1024)
+        self.train_batch_spin.setValue(16)
+        self.lr_spin = QtWidgets.QDoubleSpinBox()
+        self.lr_spin.setDecimals(6)
+        self.lr_spin.setRange(1e-6, 1.0)
+        self.lr_spin.setValue(1e-3)
+        self.num_workers_spin = QtWidgets.QSpinBox()
+        self.num_workers_spin.setRange(1, 256)
+        self.num_workers_spin.setValue(16)
+        self.prefetch_spin = QtWidgets.QSpinBox()
+        self.prefetch_spin.setRange(1, 16)
+        self.prefetch_spin.setValue(2)
+        self.load_mel_check = QtWidgets.QCheckBox("Load mel from disk")
+        self.load_mel_check.setChecked(True)
+        self.load_pitch_check = QtWidgets.QCheckBox("Load pitch from disk")
+        self.load_pitch_check.setChecked(True)
+        self.open_output_btn = QtWidgets.QPushButton("Open output folder")
+        self.open_output_btn.clicked.connect(self.open_output_folder)
+        train_btn = QtWidgets.QPushButton("Start Training")
+        train_btn.clicked.connect(self.start_training)
+        self.stop_train_btn = QtWidgets.QPushButton("Stop")
+        self.stop_train_btn.clicked.connect(self.stop_process)
+        btn_row = QtWidgets.QHBoxLayout()
+        btn_row.addWidget(train_btn)
+        btn_row.addWidget(self.stop_train_btn)
+        btn_row.addWidget(self.open_output_btn)
+        btn_container = QtWidgets.QWidget()
+        btn_container.setLayout(btn_row)
+
+        train_form.addRow("GPUs / processes", self.nproc_spin)
+        train_form.addRow("master_port", self.master_port_spin)
+        train_form.addRow("epochs", self.epochs_spin)
+        train_form.addRow("epochs-per-checkpoint", self.epc_spin)
+        train_form.addRow("batch size (-bs)", self.train_batch_spin)
+        train_form.addRow("learning rate (-lr)", self.lr_spin)
+        train_form.addRow("num-workers", self.num_workers_spin)
+        train_form.addRow("prefetch-factor", self.prefetch_spin)
+        train_form.addRow(self.load_mel_check, self.load_pitch_check)
+        train_form.addRow(btn_container)
+        train_group.setLayout(train_form)
+        vbox.addWidget(train_group)
+
+        # Text/tokenization controls
+        text_group = QtWidgets.QGroupBox("Text/tokenization consistency")
+        text_form = QtWidgets.QFormLayout()
+        self.symbol_set_edit = QtWidgets.QLineEdit(PROJECT_CONFIG.tokenizer.symbol_set)
+        self.text_cleaners_edit = QtWidgets.QLineEdit(
+            ",".join(PROJECT_CONFIG.tokenizer.text_cleaners or ["english_cleaners_v2"])
+        )
+        self.include_style_tokens_check = QtWidgets.QCheckBox("Include style tokens")
+        self.include_style_tokens_check.setChecked(PROJECT_CONFIG.tokenizer.include_style_tokens)
+        self.style_tags_edit = QtWidgets.QLineEdit(
+            ",".join(PROJECT_CONFIG.tokenizer.style_tags or [])
+        )
+        self.strip_style_check = QtWidgets.QCheckBox("Strip style from text")
+        self.strip_style_check.setChecked(PROJECT_CONFIG.tokenizer.strip_style_from_text)
+        text_form.addRow("--symbol-set", self.symbol_set_edit)
+        text_form.addRow("--text-cleaners", self.text_cleaners_edit)
+        text_form.addRow(self.include_style_tokens_check, self.strip_style_check)
+        text_form.addRow("Style tags", self.style_tags_edit)
+        text_group.setLayout(text_form)
+        vbox.addWidget(text_group)
+
+        # Command preview + logs
+        cmd_group = QtWidgets.QGroupBox("Dry run / Show command")
+        cmd_layout = QtWidgets.QVBoxLayout()
+        self.command_preview = QtWidgets.QPlainTextEdit()
+        self.command_preview.setReadOnly(True)
+        cmd_buttons = QtWidgets.QHBoxLayout()
+        self.show_precompile_btn = QtWidgets.QPushButton("Show Precompile Cmd")
+        self.show_precompile_btn.clicked.connect(lambda: self._update_command_preview(precompile=True))
+        self.show_train_btn = QtWidgets.QPushButton("Show Train Cmd")
+        self.show_train_btn.clicked.connect(lambda: self._update_command_preview(precompile=False))
+        cmd_buttons.addWidget(self.show_precompile_btn)
+        cmd_buttons.addWidget(self.show_train_btn)
+        cmd_layout.addLayout(cmd_buttons)
+        cmd_layout.addWidget(self.command_preview)
+        cmd_group.setLayout(cmd_layout)
+        vbox.addWidget(cmd_group)
+
+        log_label = QtWidgets.QLabel("Process log")
+        self.train_log = QtWidgets.QPlainTextEdit()
+        self.train_log.setReadOnly(True)
+        vbox.addWidget(log_label)
+        vbox.addWidget(self.train_log)
+
+        tab.setLayout(vbox)
+        return tab
 
     def _row(self, widget: QtWidgets.QWidget, handler: Callable[[], None]):
         h = QtWidgets.QHBoxLayout()
@@ -645,6 +882,148 @@ class MainWindow(QtWidgets.QWidget):
         self.worker.start()
         self.log("Starting synthesis…")
 
+    def _pick_dir(self, widget: QtWidgets.QLineEdit):
+        path = QtWidgets.QFileDialog.getExistingDirectory(self, "Select directory", str(BASE_DIR))
+        if path:
+            widget.setText(path)
+            self._save_settings()
+
+    def _pick_file(self, widget: QtWidgets.QLineEdit):
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Select file", str(BASE_DIR))
+        if path:
+            widget.setText(path)
+            self._save_settings()
+
+    def _apply_symbol_args(self, cmd: list[str]):
+        symbol_set = self.symbol_set_edit.text().strip()
+        if symbol_set:
+            cmd.extend(["--symbol-set", symbol_set])
+
+        cleaners = [c.strip() for c in self.text_cleaners_edit.text().split(",") if c.strip()]
+        for cleaner in cleaners:
+            cmd.extend(["--text-cleaners", cleaner])
+
+        if self.include_style_tokens_check.isChecked():
+            cmd.append("--include-style-tokens")
+
+        tags = [t.strip() for t in self.style_tags_edit.text().split(",") if t.strip()]
+        if tags:
+            cmd.extend(["--style-tags", ",".join(tags)])
+
+        if self.strip_style_check.isChecked():
+            cmd.append("--strip-style-from-text")
+
+    def _python_exec(self) -> str:
+        if self.use_venv_python_check.isChecked():
+            return sys.executable
+        return self.python_exec_edit.text().strip() or sys.executable
+
+    def _build_precompile_cmd(self) -> list[str]:
+        fastpitch_root = Path(self.fastpitch_folder_edit.text()).expanduser()
+        script = fastpitch_root / "prepare_dataset.py"
+        cmd = [
+            self._python_exec(),
+            str(script),
+            "-d",
+            self.dataset_root_edit.text(),
+            "--wav-text-filelists",
+            self.train_filelist_edit.text(),
+            self.val_filelist_edit.text(),
+        ]
+        if self.extract_mels_check.isChecked():
+            cmd.append("--extract-mels")
+        if self.extract_pitch_check.isChecked():
+            cmd.append("--extract-pitch")
+
+        cmd.extend(["-b", str(self.prep_batch_spin.value())])
+        cmd.extend(["--n-workers", str(self.prep_workers_spin.value())])
+        self._apply_symbol_args(cmd)
+        return cmd
+
+    def _build_train_cmd(self) -> list[str]:
+        fastpitch_root = Path(self.fastpitch_folder_edit.text()).expanduser()
+        script = fastpitch_root / "train.py"
+        torchrun_exec = self.torchrun_exec_edit.text().strip() or "torchrun"
+        cmd = [
+            torchrun_exec,
+            f"--nproc_per_node={self.nproc_spin.value()}",
+            f"--master_port={self.master_port_spin.value()}",
+            str(script),
+            "--cuda",
+            "--epochs",
+            str(self.epochs_spin.value()),
+            "--epochs-per-checkpoint",
+            str(self.epc_spin.value()),
+            "-bs",
+            str(self.train_batch_spin.value()),
+            "-lr",
+            str(self.lr_spin.value()),
+            "-d",
+            self.dataset_root_edit.text(),
+            "--num-workers",
+            str(self.num_workers_spin.value()),
+            "--prefetch-factor",
+            str(self.prefetch_spin.value()),
+            "--training-files",
+            self.train_filelist_edit.text(),
+            "--validation-files",
+            self.val_filelist_edit.text(),
+            "-o",
+            self.ckpt_dir_edit.text(),
+        ]
+
+        if self.load_mel_check.isChecked():
+            cmd.append("--load-mel-from-disk")
+        if self.load_pitch_check.isChecked():
+            cmd.append("--load-pitch-from-disk")
+
+        self._apply_symbol_args(cmd)
+        return cmd
+
+    def _update_command_preview(self, precompile: bool):
+        cmd = self._build_precompile_cmd() if precompile else self._build_train_cmd()
+        quoted = " ".join(shlex.quote(part) for part in cmd)
+        self.command_preview.setPlainText(quoted)
+
+    def _attach_worker(self, cmd: list[str]):
+        if self.process_worker and self.process_worker.isRunning():
+            self.train_log.appendPlainText("Another process is already running. Stop it first.")
+            return False
+
+        self.process_worker = ProcessWorker(cmd)
+        self.process_worker.log_line.connect(self.train_log.appendPlainText)
+        self.process_worker.finished.connect(self.on_process_finished)
+        self.process_worker.start()
+        return True
+
+    def start_precompile(self):
+        cmd = self._build_precompile_cmd()
+        self._update_command_preview(True)
+        self._save_settings()
+        self.train_log.appendPlainText("Starting precompile…")
+        self._attach_worker(cmd)
+
+    def start_training(self):
+        cmd = self._build_train_cmd()
+        self._update_command_preview(False)
+        self._save_settings()
+        self.train_log.appendPlainText("Starting training…")
+        self._attach_worker(cmd)
+
+    def stop_process(self):
+        if self.process_worker and self.process_worker.isRunning():
+            self.train_log.appendPlainText("Stopping process…")
+            self.process_worker.stop()
+        else:
+            self.train_log.appendPlainText("No running process to stop.")
+
+    def on_process_finished(self, exit_code: int):
+        self.train_log.appendPlainText(f"Process finished with code {exit_code}")
+
+    def open_output_folder(self):
+        path = Path(self.ckpt_dir_edit.text()).expanduser()
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(path)))
+
     def _load_settings(self):
         self.fastpitch_edit.setText(self.settings.value("fastpitch", ""))
         self.hifigan_edit.setText(self.settings.value("hifigan", ""))
@@ -669,6 +1048,75 @@ class MainWindow(QtWidgets.QWidget):
         self.pitch_amplify_spin.setValue(float(self.settings.value("pitch_amplify", self.pitch_amplify_spin.value())))
         self.pitch_shift_spin.setValue(float(self.settings.value("pitch_shift", self.pitch_shift_spin.value())))
 
+        # Training tab
+        self.dataset_root_edit.setText(
+            self.settings.value("dataset_root", self.dataset_root_edit.text())
+        )
+        self.train_filelist_edit.setText(
+            self.settings.value("train_filelist", self.train_filelist_edit.text())
+        )
+        self.val_filelist_edit.setText(
+            self.settings.value("val_filelist", self.val_filelist_edit.text())
+        )
+        self.ckpt_dir_edit.setText(self.settings.value("ckpt_dir", self.ckpt_dir_edit.text()))
+        self.fastpitch_folder_edit.setText(
+            self.settings.value("fastpitch_folder", self.fastpitch_folder_edit.text())
+        )
+        self.python_exec_edit.setText(
+            self.settings.value("python_exec", self.python_exec_edit.text())
+        )
+        self.use_venv_python_check.setChecked(
+            self.settings.value("use_venv_python", True, type=bool)
+        )
+        self.torchrun_exec_edit.setText(
+            self.settings.value("torchrun_exec", self.torchrun_exec_edit.text())
+        )
+        self.extract_mels_check.setChecked(
+            self.settings.value("extract_mels", self.extract_mels_check.isChecked(), type=bool)
+        )
+        self.extract_pitch_check.setChecked(
+            self.settings.value("extract_pitch", self.extract_pitch_check.isChecked(), type=bool)
+        )
+        self.prep_batch_spin.setValue(int(self.settings.value("prep_batch", self.prep_batch_spin.value())))
+        self.prep_workers_spin.setValue(
+            int(self.settings.value("prep_workers", self.prep_workers_spin.value()))
+        )
+        self.nproc_spin.setValue(int(self.settings.value("nproc", self.nproc_spin.value())))
+        self.master_port_spin.setValue(int(self.settings.value("master_port", self.master_port_spin.value())))
+        self.epochs_spin.setValue(int(self.settings.value("epochs", self.epochs_spin.value())))
+        self.epc_spin.setValue(int(self.settings.value("epc", self.epc_spin.value())))
+        self.train_batch_spin.setValue(
+            int(self.settings.value("train_batch", self.train_batch_spin.value()))
+        )
+        self.lr_spin.setValue(float(self.settings.value("lr", self.lr_spin.value())))
+        self.num_workers_spin.setValue(
+            int(self.settings.value("num_workers", self.num_workers_spin.value()))
+        )
+        self.prefetch_spin.setValue(int(self.settings.value("prefetch", self.prefetch_spin.value())))
+        self.load_mel_check.setChecked(
+            self.settings.value("load_mel", self.load_mel_check.isChecked(), type=bool)
+        )
+        self.load_pitch_check.setChecked(
+            self.settings.value("load_pitch", self.load_pitch_check.isChecked(), type=bool)
+        )
+        self.symbol_set_edit.setText(self.settings.value("symbol_set", self.symbol_set_edit.text()))
+        self.text_cleaners_edit.setText(
+            self.settings.value("text_cleaners", self.text_cleaners_edit.text())
+        )
+        self.include_style_tokens_check.setChecked(
+            self.settings.value(
+                "include_style_tokens",
+                self.include_style_tokens_check.isChecked(),
+                type=bool,
+            )
+        )
+        self.style_tags_edit.setText(
+            self.settings.value("style_tags", self.style_tags_edit.text())
+        )
+        self.strip_style_check.setChecked(
+            self.settings.value("strip_style", self.strip_style_check.isChecked(), type=bool)
+        )
+
     def _save_settings(self):
         self.settings.setValue("fastpitch", self.fastpitch_edit.text())
         self.settings.setValue("hifigan", self.hifigan_edit.text())
@@ -688,6 +1136,33 @@ class MainWindow(QtWidgets.QWidget):
         self.settings.setValue("batch", self.batch_spin.value())
         self.settings.setValue("pitch_amplify", self.pitch_amplify_spin.value())
         self.settings.setValue("pitch_shift", self.pitch_shift_spin.value())
+        self.settings.setValue("dataset_root", self.dataset_root_edit.text())
+        self.settings.setValue("train_filelist", self.train_filelist_edit.text())
+        self.settings.setValue("val_filelist", self.val_filelist_edit.text())
+        self.settings.setValue("ckpt_dir", self.ckpt_dir_edit.text())
+        self.settings.setValue("fastpitch_folder", self.fastpitch_folder_edit.text())
+        self.settings.setValue("python_exec", self.python_exec_edit.text())
+        self.settings.setValue("use_venv_python", self.use_venv_python_check.isChecked())
+        self.settings.setValue("torchrun_exec", self.torchrun_exec_edit.text())
+        self.settings.setValue("extract_mels", self.extract_mels_check.isChecked())
+        self.settings.setValue("extract_pitch", self.extract_pitch_check.isChecked())
+        self.settings.setValue("prep_batch", self.prep_batch_spin.value())
+        self.settings.setValue("prep_workers", self.prep_workers_spin.value())
+        self.settings.setValue("nproc", self.nproc_spin.value())
+        self.settings.setValue("master_port", self.master_port_spin.value())
+        self.settings.setValue("epochs", self.epochs_spin.value())
+        self.settings.setValue("epc", self.epc_spin.value())
+        self.settings.setValue("train_batch", self.train_batch_spin.value())
+        self.settings.setValue("lr", self.lr_spin.value())
+        self.settings.setValue("num_workers", self.num_workers_spin.value())
+        self.settings.setValue("prefetch", self.prefetch_spin.value())
+        self.settings.setValue("load_mel", self.load_mel_check.isChecked())
+        self.settings.setValue("load_pitch", self.load_pitch_check.isChecked())
+        self.settings.setValue("symbol_set", self.symbol_set_edit.text())
+        self.settings.setValue("text_cleaners", self.text_cleaners_edit.text())
+        self.settings.setValue("include_style_tokens", self.include_style_tokens_check.isChecked())
+        self.settings.setValue("style_tags", self.style_tags_edit.text())
+        self.settings.setValue("strip_style", self.strip_style_check.isChecked())
 
     def closeEvent(self, event):  # noqa: N802,D401
         """Persist settings when the window is closed."""
