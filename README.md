@@ -104,6 +104,8 @@ python run.py
 
 In the window, choose your FastPitch checkpoint, HiFi-GAN generator + config, output directory, and paste one phrase per line. Optional controls include pace, pitch transforms, CUDA/AMP toggles, mel saving, and batch size. Outputs are written to `<output>/mels/*.npy` (when enabled) and `<output>/wavs/*.wav` with unique filenames.
 
+> **Note:** If the CMU Pronouncing Dictionary file (`third_party/fastpitch/cmudict/cmudict-0.7b`) is missing, the GUI will download it automatically the first time phoneme conversion is needed. Offline environments can manually place the file at that path from https://github.com/cmusphinx/cmudict.
+
 ## KEEP vs REMOVED (quarantined)
 - **Kept:** FastPitch + HiFi-GAN code, minimal helper scripts (`tools/`), GUI (`run.py`), inference assets, checkpoints folder structure.
 - **Quarantined:** Tacotron2/WaveGlow inference script and legacy config (`deprecated/`), unused debug/inspection utilities (`deprecated/tools`), old logs and placeholder inference files, Python `__pycache__` outputs.
