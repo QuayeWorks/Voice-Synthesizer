@@ -32,7 +32,7 @@ from PyQt5 import QtCore, QtWidgets
 
 # FastPitch + HiFi-GAN imports
 from third_party.fastpitch import inference as fp_infer
-from third_party.fastpitch.common import cmudict
+from third_party.fastpitch.common.text import cmudict
 from third_party.hifigan.env import AttrDict
 from third_party.hifigan.models import Generator
 
