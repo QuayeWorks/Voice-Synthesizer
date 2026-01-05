@@ -34,18 +34,20 @@ def _configure_qt_platform():
     """Pick a sensible Qt platform plugin based on the environment.
 
     - Respect an explicit QT_QPA_PLATFORM provided by the user.
-    - If a display server is detected (X11/Wayland), let Qt choose the default
-      platform plugin instead of forcing offscreen. This avoids warnings like
-      "This plugin does not support propagateSizeHints()" that can appear when
-      offscreen is used even though a display is available.
-    - Fall back to the offscreen plugin in headless environments to keep the
-      GUI runnable in CI/servers without xcb.
+    - Prefer the Wayland backend on WSLg/Wayland systems to avoid xcb
+      dependency issues.
+    - If X11 is available, let Qt choose its default (usually xcb).
+    - Fall back to the offscreen plugin in headless environments.
     """
 
     if os.getenv("QT_QPA_PLATFORM"):
         return
 
-    if os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY"):
+    if os.getenv("WAYLAND_DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
+        return
+
+    if os.getenv("DISPLAY"):
         return
 
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
