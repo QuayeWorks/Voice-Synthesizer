@@ -30,11 +30,28 @@ import numpy as np
 import torch
 from scipy.io.wavfile import write
 
-# Prefer the offscreen Qt plugin by default so the app can run in environments
-# without the xcb dependencies. Users can override by setting
-# QT_QPA_PLATFORM explicitly (e.g., to "xcb" when a display is available).
-if not os.getenv("QT_QPA_PLATFORM"):
+def _configure_qt_platform():
+    """Pick a sensible Qt platform plugin based on the environment.
+
+    - Respect an explicit QT_QPA_PLATFORM provided by the user.
+    - If a display server is detected (X11/Wayland), let Qt choose the default
+      platform plugin instead of forcing offscreen. This avoids warnings like
+      "This plugin does not support propagateSizeHints()" that can appear when
+      offscreen is used even though a display is available.
+    - Fall back to the offscreen plugin in headless environments to keep the
+      GUI runnable in CI/servers without xcb.
+    """
+
+    if os.getenv("QT_QPA_PLATFORM"):
+        return
+
+    if os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY"):
+        return
+
     os.environ["QT_QPA_PLATFORM"] = "offscreen"
+
+
+_configure_qt_platform()
 
 from PyQt5 import QtCore, QtWidgets
 
