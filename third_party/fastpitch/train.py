@@ -103,6 +103,7 @@ from .common import tb_dllogger as logger
 from . import models
 from .common.tb_dllogger import log
 from .common.text import cmudict
+from .common.text.symbols import STYLE_TAGS, get_symbols
 from .common.utils import BenchmarkStats, prepare_tmp
 from .fastpitch.attn_loss_function import AttentionBinarizationLoss
 from .fastpitch.data_function import batch_to_gpu, TTSCollate, TTSDataset
@@ -182,7 +183,7 @@ def parse_args(parser):
                            'for each word; set 0 for pure grapheme training')
     data.add_argument('--strip-style-from-text', action='store_true',
                       help='Remove leading style tag from text sequence but expose style id separately')
-    data.add_argument('--style-tags', nargs='*', default=None,
+    data.add_argument('--style-tags', nargs='*', default=STYLE_TAGS,
                       help='Optional override list of supported style tags')
     data.add_argument('--heteronyms-path', type=str, default='cmudict/heteronyms',
                       help='Path to the list of heteronyms')
@@ -452,11 +453,11 @@ def _augment_filelist_for_cache(in_path: str, out_path: str, dataset_root: str,
 
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description='PyTorch FastPitch Training',
                                      allow_abbrev=False)
     parser = parse_args(parser)
-    args, _ = parser.parse_known_args()
+    args, _ = parser.parse_known_args(argv)
 
     if args.p_arpabet > 0.0:
         cmudict.initialize(args.cmudict_path, keep_ambiguous=True)
@@ -480,9 +481,19 @@ def main():
     logger.parameters(vars(args), tb_subset='train')
 
     parser = models.parse_model_args('FastPitch', parser)
-    args, unk_args = parser.parse_known_args()
+    args, unk_args = parser.parse_known_args(argv)
     if len(unk_args) > 0:
         raise ValueError(f'Invalid options {unk_args}')
+
+    symbol_table = get_symbols(args.symbol_set, include_style_tokens=True, style_tags=args.style_tags)
+    if args.local_rank == 0:
+        print(
+            "Tokenizer: "
+            f"symbol_set={args.symbol_set} (n_symbols={len(symbol_table)}) | "
+            f"text_cleaners={', '.join(args.text_cleaners)} | "
+            f"style_tags={len(args.style_tags)} locked tags | "
+            f"strip_style_from_text={args.strip_style_from_text}"
+        )
 
     torch.backends.cudnn.benchmark = args.cudnn_benchmark
 

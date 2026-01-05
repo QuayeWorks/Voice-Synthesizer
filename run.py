@@ -36,6 +36,8 @@ import sys
 from pathlib import Path
 from typing import Callable, Iterable, List, Optional, Sequence
 
+from fastpitch_config import FastPitchProjectConfig, TokenizerConfig, load_fastpitch_config
+
 import numpy as np
 import torch
 from scipy.io.wavfile import write
@@ -78,6 +80,11 @@ from third_party.hifigan.env import AttrDict  # noqa: E402
 from third_party.hifigan.models import Generator  # noqa: E402
 
 BASE_DIR = Path(__file__).parent.resolve()
+PROJECT_CONFIG: FastPitchProjectConfig = load_fastpitch_config()
+
+
+def summarize_tokenizer(separator: str = " | ") -> str:
+    return separator.join(PROJECT_CONFIG.tokenizer.summary_lines())
 
 
 @dataclass
@@ -157,6 +164,7 @@ def fastpitch_infer(
     batch_size: int = 8,
     use_amp: bool = False,
     progress: Optional[Callable[[str], None]] = None,
+    tokenizer_cfg: TokenizerConfig | None = None,
 ) -> List[FastPitchOutput]:
     """Run FastPitch on provided text lines and return mel outputs."""
 
@@ -175,16 +183,20 @@ def fastpitch_infer(
     if progress:
         progress("Preparing input batches…")
 
+    tokenizer_cfg = tokenizer_cfg or PROJECT_CONFIG.tokenizer
     fields = {"text": list(texts), "output": list(stems)}
     batches = fp_infer.prepare_input_sequence(
         fields,
         device,
-        symbol_set="english_basic",
-        text_cleaners=["english_cleaners_v2"],
+        symbol_set=tokenizer_cfg.symbol_set,
+        text_cleaners=tokenizer_cfg.text_cleaners,
         batch_size=batch_size,
         dataset=None,
         load_mels=False,
-        p_arpabet=0.0,
+        p_arpabet=tokenizer_cfg.p_arpabet,
+        include_style_tokens=tokenizer_cfg.include_style_tokens,
+        style_tags=tokenizer_cfg.style_tags,
+        strip_style_from_text=tokenizer_cfg.strip_style_from_text,
     )
 
     pitch_transform = _build_pitch_transform(pitch)
@@ -296,6 +308,7 @@ def run_pipeline(
 
     if progress:
         progress(f"Running on {device}")
+        progress(f"Tokenizer: {summarize_tokenizer()}")
 
     output_root.mkdir(parents=True, exist_ok=True)
     mel_dir = output_root / "mels"
@@ -419,6 +432,10 @@ class MainWindow(QtWidgets.QWidget):
         self.text_edit = QtWidgets.QPlainTextEdit()
         self.text_edit.setPlaceholderText("Enter one phrase per line")
 
+        self.tokenizer_label = QtWidgets.QLabel(summarize_tokenizer("\n"))
+        self.tokenizer_label.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
+        self.tokenizer_label.setWordWrap(True)
+
         self.cuda_check = QtWidgets.QCheckBox("Use CUDA if available")
         self.cuda_check.setChecked(torch.cuda.is_available())
         self.amp_check = QtWidgets.QCheckBox("Use AMP (FastPitch)")
@@ -464,6 +481,7 @@ class MainWindow(QtWidgets.QWidget):
             layout.addRow(label, self._row(widget, handler))
 
         layout.addRow("Text", self.text_edit)
+        layout.addRow("Tokenizer", self.tokenizer_label)
         layout.addRow(self.cuda_check, self.amp_check)
         layout.addRow("Pace", self.pace_spin)
         layout.addRow("Batch size", self.batch_spin)
@@ -599,6 +617,7 @@ class MainWindow(QtWidgets.QWidget):
         self.log(f"  HiFi-GAN config: {hifigan_cfg}")
         self.log(f"  Phrases file (-i): {input_file if input_file else '(text box)'}")
         self.log(f"  Output directory: {output_dir}")
+        self.log(f"  Tokenizer: {summarize_tokenizer()}")
 
         pitch = PitchSettings(
             flatten=self.pitch_flat_check.isChecked(),
@@ -732,6 +751,8 @@ def _run_cli(argv: Sequence[str]) -> bool:
         raise ValueError("Input text file is empty after stripping blank lines")
 
     cmudict.initialize(str(BASE_DIR / "third_party/fastpitch/cmudict/cmudict-0.7b"), keep_ambiguous=True)
+
+    print(f"Tokenizer: {summarize_tokenizer()}", file=sys.stderr)
 
     pitch = PitchSettings(
         flatten=args.pitch_flatten,
