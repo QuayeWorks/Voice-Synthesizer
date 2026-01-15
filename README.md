@@ -106,10 +106,6 @@ In the window, choose your QWPitch checkpoint, QWGAN generator + config, output 
 
 > **Note:** If the CMU Pronouncing Dictionary file (`third_party/fastpitch/cmudict/cmudict-0.7b`) is missing, the GUI will download it automatically the first time phoneme conversion is needed. Offline environments can manually place the file at that path from https://github.com/cmusphinx/cmudict.
 
-## KEEP vs REMOVED (quarantined)
-- **Kept:** QWPitch + QWGAN code, minimal helper scripts (`tools/`), GUI (`run.py`), inference assets, checkpoints folder structure.
-- **Quarantined:** Tacotron2/WaveGlow inference script and legacy config (`deprecated/`), unused debug/inspection utilities (`deprecated/tools`), old logs and placeholder inference files, Python `__pycache__` outputs.
-
 ## Notes
 - Run commands from the repository root so relative imports resolve correctly.
 - `inference/mels` and `inference/wavs` stay organized for saved assets; `checkpoints/` holds your trained models.
